@@ -3,6 +3,7 @@ name: odb2mon CI/CD
 on:
   push:
     branches: [ master, main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ master, main ]
 
@@ -52,11 +53,41 @@ jobs:
       - name: Build Release CLI
         run: cargo build --release --bin obd-cli
 
-      - name: Upload Windows Binary
+      - name: Build Windows MSI Installer (WiX)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path target/wix -Force
+          $wixBin = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          if (Test-Path "$wixBin\candle.exe") {
+            & "$wixBin\candle.exe" -arch x64 -out target/wix/main.wixobj wix/main.wxs
+            & "$wixBin\light.exe" -out target/wix/odb2mon-installer.msi target/wix/main.wixobj
+          } else {
+            candle.exe -arch x64 -out target/wix/main.wixobj wix/main.wxs
+            light.exe -out target/wix/odb2mon-installer.msi target/wix/main.wixobj
+          }
+
+      - name: Upload Windows Standalone Binary
         uses: actions/upload-artifact@v4
         with:
-          name: obd-cli-windows-x64
+          name: odb2mon-windows-x64-exe
           path: target/release/obd-cli.exe
+
+      - name: Upload Windows MSI Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: odb2mon-windows-x64-msi
+          path: target/wix/odb2mon-installer.msi
+
+      - name: Publish to GitHub Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/wix/odb2mon-installer.msi
+            target/release/obd-cli.exe
+          draft: false
+          prerelease: false
+          generate_release_notes: true
 
   build-android:
     name: Cross-Compile Android Target

@@ -12,7 +12,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=====================================================");
     println!("  odb2mon - Cross-Platform Vehicle Diagnostic System  ");
+    let version = env!("CARGO_PKG_VERSION");
+    println!("  Version: v{version} (Windows x64)");
     println!("=====================================================");
+
+    // Spawn non-blocking background check for newer releases on GitHub
+    tokio::spawn(async move {
+        if let Ok(info) = obd_core::check_for_updates(env!("CARGO_PKG_VERSION")).await {
+            if info.update_available {
+                eprintln!(
+                    "\n>>> UPDATE AVAILABLE: v{} is available! (Installed: v{}) <<<",
+                    info.latest_version, info.current_version
+                );
+                if let Some(msi) = &info.msi_download_url {
+                    eprintln!("    Download MSI: {msi}");
+                }
+                if let Some(exe) = &info.exe_download_url {
+                    eprintln!("    Download EXE: {exe}");
+                }
+                eprintln!("    Release Page: {}\n", info.html_url);
+            }
+        }
+    });
 
     let args: Vec<String> = env::args().collect();
     let mode = args.get(1).map(|s| s.as_str()).unwrap_or("mock");

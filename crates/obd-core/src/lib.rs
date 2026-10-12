@@ -4,6 +4,7 @@ pub mod error;
 pub mod manager;
 pub mod profile;
 pub mod protocols;
+pub mod updater;
 
 // Public re-exports for easy downstream consumption
 pub use adapters::{BluetoothConnection, EnetConnection, MockConnection};
@@ -13,3 +14,4 @@ pub use manager::VehicleManager;
 pub use profile::{
     DashboardSnapshot, DtcRecord, DtcStatus, ParameterType, ParameterValue, VehicleProfile,
 };
+pub use updater::{check_for_updates, parse_clean_semver, UpdateInfo};
