@@ -17,4 +17,3 @@ pub use profile::{
     DashboardSnapshot, DtcRecord, DtcStatus, ParameterType, ParameterValue, VehicleProfile,
 };
 pub use updater::{check_for_updates, parse_clean_semver, UpdateInfo};
-

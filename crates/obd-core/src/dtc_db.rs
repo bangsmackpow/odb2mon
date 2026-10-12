@@ -18,10 +18,14 @@ pub fn lookup_known_dtc(code: &str) -> Option<&'static str> {
         "P0008" => Some("Engine Position System Performance Bank 1 (Timing Chain Slack)"),
         "P0009" => Some("Engine Position System Performance Bank 2 (Timing Chain Slack)"),
         "P0010" => Some("Camshaft Position Actuator Circuit / Open (Bank 1)"),
-        "P0011" => Some("Camshaft Position A - Timing Over-Advanced or System Performance (Bank 1)"),
+        "P0011" => {
+            Some("Camshaft Position A - Timing Over-Advanced or System Performance (Bank 1)")
+        }
         "P0012" => Some("Camshaft Position A - Timing Over-Retarded (Bank 1)"),
         "P0013" => Some("Camshaft Position B - Actuator Circuit / Open (Bank 1)"),
-        "P0014" => Some("Camshaft Position B - Timing Over-Advanced or System Performance (Bank 1)"),
+        "P0014" => {
+            Some("Camshaft Position B - Timing Over-Advanced or System Performance (Bank 1)")
+        }
         "P0015" => Some("Camshaft Position B - Timing Over-Retarded (Bank 1)"),
         "P0016" => Some("Crankshaft Position - Camshaft Position Correlation (Bank 1 Sensor A)"),
         "P0017" => Some("Crankshaft Position - Camshaft Position Correlation (Bank 1 Sensor B)"),
@@ -195,8 +199,12 @@ pub fn lookup_known_dtc(code: &str) -> Option<&'static str> {
         "135704" => Some("Valvetronic servo motor: Position sensor signal implausible"),
 
         // Air Mass & Intake Pressure
-        "101F01" => Some("Throttle valve angle - absolute pressure intake pipe, comparison: Pressure too high"),
-        "101F02" => Some("Throttle valve angle - absolute pressure intake pipe, comparison: Pressure too low"),
+        "101F01" => Some(
+            "Throttle valve angle - absolute pressure intake pipe, comparison: Pressure too high",
+        ),
+        "101F02" => Some(
+            "Throttle valve angle - absolute pressure intake pipe, comparison: Pressure too low",
+        ),
         "102001" => Some("Air mass, plausibility: Air mass too high"),
         "102002" => Some("Air mass, plausibility: Air mass too low"),
 
@@ -284,7 +292,8 @@ pub fn lookup_description(code: &str) -> &'static str {
         }
     }
 
-    if (trimmed.len() == 6 || trimmed.len() == 4) && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+    if (trimmed.len() == 6 || trimmed.len() == 4) && trimmed.chars().all(|c| c.is_ascii_hexdigit())
+    {
         if trimmed.len() == 6 {
             return "BMW Electronic Control Unit (DME/DDE) Fault Code";
         } else {
@@ -313,10 +322,7 @@ mod tests {
             lookup_description("P0128"),
             "Coolant Thermostat (Coolant Temp Below Regulating Temperature)"
         );
-        assert_eq!(
-            lookup_description("P0171"),
-            "System Too Lean (Bank 1)"
-        );
+        assert_eq!(lookup_description("P0171"), "System Too Lean (Bank 1)");
     }
 
     #[test]
