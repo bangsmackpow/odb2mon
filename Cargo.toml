@@ -2,11 +2,12 @@
 resolver = "2"
 members = [
     "crates/obd-core",
-    "crates/obd-cli"
+    "crates/obd-cli",
+    "crates/app-gui/src-tauri"
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["odb2mon Contributors"]
 license = "MIT OR Apache-2.0"

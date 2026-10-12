@@ -53,8 +53,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Build Release CLI
-        run: cargo build --release --bin obd-cli
+      - name: Build Release Binaries (CLI and GUI)
+        run: cargo build --release --bin obd-cli --bin odb2mon-app
 
       - name: Build Windows MSI Installer (WiX)
         shell: pwsh
@@ -69,10 +69,16 @@ jobs:
             light.exe -out target/wix/odb2mon-installer.msi target/wix/main.wixobj
           }
 
-      - name: Upload Windows Standalone Binary
+      - name: Upload Windows Standalone GUI Binary
         uses: actions/upload-artifact@v4
         with:
-          name: odb2mon-windows-x64-exe
+          name: odb2mon-gui-windows-x64-exe
+          path: target/release/odb2mon-app.exe
+
+      - name: Upload Windows Standalone CLI Binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: odb2mon-cli-windows-x64-exe
           path: target/release/obd-cli.exe
 
       - name: Upload Windows MSI Installer
@@ -87,6 +93,7 @@ jobs:
         with:
           files: |
             target/wix/odb2mon-installer.msi
+            target/release/odb2mon-app.exe
             target/release/obd-cli.exe
           draft: false
           prerelease: false

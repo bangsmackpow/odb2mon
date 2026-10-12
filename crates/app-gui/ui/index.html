@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>odb2mon - Vehicle Diagnostics</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Header Navigation Bar -->
+    <header class="header">
+      <div class="brand">
+        <span class="brand-logo">ODB2MON</span>
+        <span class="version-badge" id="appVersion">v0.2.0</span>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-page="dashboard">
+          <span class="icon">📊</span> DASHBOARD
+        </button>
+        <button class="nav-btn" data-page="dtcs">
+          <span class="icon">🛠</span> FAULT CODES <span class="badge" id="dtcBadge">0</span>
+        </button>
+        <button class="nav-btn" data-page="profiles">
+          <span class="icon">⚙</span> PROFILES
+        </button>
+        <button class="nav-btn" data-page="updates">
+          <span class="icon">🔄</span> UPDATES
+        </button>
+      </nav>
+
+      <div class="connection-status">
+        <span class="status-indicator" id="statusDot"></span>
+        <div class="status-info">
+          <span class="status-text" id="statusText">CONNECTING...</span>
+          <span class="status-sub" id="vehicleName">BMW F10 (Simulator)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Views Container -->
+    <main class="content">
+      <!-- 1. DASHBOARD VIEW -->
+      <section id="page-dashboard" class="page active">
+        <div class="gauge-grid">
+          <!-- RPM Gauge -->
+          <div class="gauge-card">
+            <div class="gauge-header">ENGINE CRANKSHAFT</div>
+            <div class="svg-gauge-container">
+              <svg viewBox="0 0 200 200" class="gauge-svg">
+                <circle class="gauge-bg" cx="100" cy="100" r="80"></circle>
+                <circle class="gauge-track" cx="100" cy="100" r="80"></circle>
+                <circle class="gauge-redline" cx="100" cy="100" r="80"></circle>
+                <circle id="rpmArc" class="gauge-bar rpm-bar" cx="100" cy="100" r="80"></circle>
+              </svg>
+              <div class="gauge-center">
+                <div class="gauge-val" id="valRpm">0</div>
+                <div class="gauge-unit">RPM</div>
+              </div>
+            </div>
+            <div class="gauge-footer">MAX 7000 · REDLINE 6500</div>
+          </div>
+
+          <!-- Speed Gauge -->
+          <div class="gauge-card">
+            <div class="gauge-header">VEHICLE SPEED</div>
+            <div class="svg-gauge-container">
+              <svg viewBox="0 0 200 200" class="gauge-svg">
+                <circle class="gauge-bg" cx="100" cy="100" r="80"></circle>
+                <circle class="gauge-track" cx="100" cy="100" r="80"></circle>
+                <circle id="speedArc" class="gauge-bar speed-bar" cx="100" cy="100" r="80"></circle>
+              </svg>
+              <div class="gauge-center">
+                <div class="gauge-val" id="valSpeed">0</div>
+                <div class="gauge-unit" id="unitSpeed">KM/H</div>
+              </div>
+            </div>
+            <div class="gauge-footer">
+              <button class="unit-toggle" id="toggleSpeedUnit">TOGGLE MPH / KM/H</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secondary Temperature Gauges -->
+        <div class="temp-grid">
+          <!-- Coolant Temp -->
+          <div class="temp-card">
+            <div class="temp-meta">
+              <span class="temp-label">ENGINE COOLANT</span>
+              <span class="temp-sub">THERMOSTAT PLATEAU 85-95°C</span>
+            </div>
+            <div class="temp-body">
+              <div class="temp-display" id="valCoolant">-- °C</div>
+              <div class="temp-bar-bg">
+                <div class="temp-bar-fill coolant-fill" id="coolantBar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Oil Temp -->
+          <div class="temp-card">
+            <div class="temp-meta">
+              <span class="temp-label">ENGINE OIL</span>
+              <span class="temp-sub">OPERATING TEMP 95-105°C</span>
+            </div>
+            <div class="temp-body">
+              <div class="temp-display" id="valOil">-- °C</div>
+              <div class="temp-bar-bg">
+                <div class="temp-bar-fill oil-fill" id="oilBar" style="width: 0%"></div>
+              </div>
+              <div class="unsupported-badge" id="oilUnsupportedBadge" style="display: none;">
+                N/A · UNSUPPORTED BY ECU
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. DIAGNOSTICS & DTC VIEW -->
+      <section id="page-dtcs" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>DIAGNOSTIC TROUBLE CODES</h2>
+            <p>Active and pending ECU fault memories across powertrain controllers</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="btnScanDtcs">🔄 RE-SCAN CODES</button>
+            <button class="btn btn-danger" id="btnClearDtcs">⚠️ CLEAR ALL CODES</button>
+          </div>
+        </div>
+
+        <div class="dtc-container">
+          <div class="dtc-empty" id="dtcEmpty">
+            <div class="empty-icon">✓</div>
+            <h3>NO ACTIVE FAULT CODES DETECTED</h3>
+            <p>All controller status masks report zero persistent faults.</p>
+          </div>
+
+          <div class="dtc-list" id="dtcList" style="display: none;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. VEHICLE PROFILES VIEW -->
+      <section id="page-profiles" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>VEHICLE PROFILES & HARDWARE</h2>
+            <p>Select vehicle controller protocol and hardware interface parameters</p>
+          </div>
+        </div>
+
+        <div class="profile-cards">
+          <!-- Profile 1: BMW F10 -->
+          <div class="profile-card" data-profile="bmw">
+            <div class="profile-header">
+              <h3>2011 BMW 535i xDrive (F10 / N55)</h3>
+              <span class="profile-tag">UDS / DoIP (Ethernet)</span>
+            </div>
+            <p class="profile-desc">Communicates via ENET cable (RJ45-to-OBD2) using ISO 13400 DoIP and ISO 14229 UDS directly to BMW DME (0x0012).</p>
+            <div class="profile-inputs">
+              <label>Host IP: <input type="text" id="bmwHost" value="169.254.1.1"></label>
+              <label>Port: <input type="number" id="bmwPort" value="6801"></label>
+            </div>
+            <button class="btn btn-primary btn-select-profile" data-profile="bmw">CONNECT LIVE ENET</button>
+            <button class="btn btn-secondary btn-select-profile" data-profile="simulator_bmw">RUN IN SIMULATOR</button>
+          </div>
+
+          <!-- Profile 2: GMC Acadia -->
+          <div class="profile-card" data-profile="gmc">
+            <div class="profile-header">
+              <h3>2010 GMC Acadia (3.6L LLT)</h3>
+              <span class="profile-tag">SAE J1979 / ELM327 (Serial)</span>
+            </div>
+            <p class="profile-desc">Communicates via Bluetooth ELM327 using Mode 01 standard PIDs and Mode 22 GM specific PIDs. Oil temp fallback active.</p>
+            <div class="profile-inputs">
+              <label>COM Port: <input type="text" id="gmcPort" value="COM3"></label>
+              <label>Baud Rate: <input type="number" id="gmcBaud" value="38400"></label>
+            </div>
+            <button class="btn btn-primary btn-select-profile" data-profile="gmc">CONNECT LIVE BLUETOOTH</button>
+            <button class="btn btn-secondary btn-select-profile" data-profile="simulator_gmc">RUN IN SIMULATOR</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. UPDATES VIEW -->
+      <section id="page-updates" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>VERSION & UPDATES</h2>
+            <p>GitHub Releases automatic version comparator and installer distribution</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-primary" id="btnCheckUpdate">CHECK FOR UPDATES</button>
+          </div>
+        </div>
+
+        <div class="update-card" id="updateCard">
+          <div class="update-header">
+            <div>
+              <h3 id="updateVersionTitle">Current Version: v0.2.0</h3>
+              <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
+            </div>
+            <span class="update-pill" id="updatePill">UP TO DATE</span>
+          </div>
+
+          <div class="update-details" id="updateDetails" style="display: none;">
+            <div class="release-notes" id="updateReleaseNotes"></div>
+            <div class="update-links" id="updateLinks"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Safety Confirmation Modal for DTC Clear -->
+    <div class="modal-overlay" id="confirmModal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-icon">⚠️</div>
+        <h3>CONFIRM CLEAR DIAGNOSTIC MEMORY</h3>
+        <p class="modal-warn">
+          Clearing fault codes will erase all active DTCs, ECU freeze-frame snapshots, and reset state emissions inspection readiness monitors.
+        </p>
+        <p class="modal-hint">
+          Requirement: Verify vehicle ignition is ON (engine NOT running).
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCancelClear">CANCEL</button>
+          <button class="btn btn-danger" id="btnConfirmClear">CONFIRM & CLEAR CODES</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

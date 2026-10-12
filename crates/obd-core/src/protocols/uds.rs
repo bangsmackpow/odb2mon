@@ -133,6 +133,7 @@ pub fn parse_dtc_response(payload: &[u8]) -> Result<Vec<DtcRecord>, ObdError> {
     // Each DTC record in ISO 14229 is 4 bytes: 3 bytes DTC Code + 1 byte Status
     for chunk in dtc_data.as_chunks::<4>().0 {
         let code_hex = format!("{:02X}{:02X}{:02X}", chunk[0], chunk[1], chunk[2]);
+        let description = crate::dtc_db::lookup_description(&code_hex).to_string();
         let status_byte = chunk[3];
         let status = if (status_byte & 0x08) != 0 {
             DtcStatus::Confirmed
@@ -144,7 +145,7 @@ pub fn parse_dtc_response(payload: &[u8]) -> Result<Vec<DtcRecord>, ObdError> {
 
         dtcs.push(DtcRecord {
             code: code_hex,
-            description: "BMW DME Hex Diagnostic Trouble Code".into(),
+            description,
             status,
             ecu_source: Some("BMW DME".into()),
         });
@@ -187,5 +188,30 @@ mod tests {
             }
             _ => panic!("Expected NegativeResponse"),
         }
+    }
+
+    #[test]
+    fn test_parse_dtc_response() {
+        // Positive response 0x59, Subfunction 0x02, AvailabilityMask 0xFF
+        // DTC 1: 0x12, 0x04, 0x08, Status 0x2F (bit 3 set -> Confirmed) -> 120408
+        // DTC 2: 0x13, 0x01, 0x04, Status 0x24 (bit 2 set -> Pending)   -> 130104
+        let payload = [
+            0x59, 0x02, 0xFF, 0x12, 0x04, 0x08, 0x2F, 0x13, 0x01, 0x04, 0x24,
+        ];
+        let dtcs = parse_dtc_response(&payload).unwrap();
+        assert_eq!(dtcs.len(), 2);
+        assert_eq!(dtcs[0].code, "120408");
+        assert_eq!(
+            dtcs[0].description,
+            "Charging pressure control: Switch-off, pressure build-up disabled"
+        );
+        assert_eq!(dtcs[0].status, DtcStatus::Confirmed);
+
+        assert_eq!(dtcs[1].code, "130104");
+        assert_eq!(
+            dtcs[1].description,
+            "VANOS, intake: Camshaft angle not reached"
+        );
+        assert_eq!(dtcs[1].status, DtcStatus::Pending);
     }
 }

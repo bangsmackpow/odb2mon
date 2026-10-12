@@ -131,9 +131,10 @@ pub fn parse_mode03_dtcs(raw_response: &str) -> Result<Vec<DtcRecord>, ObdError>
                 _ => 'P',
             };
             let code = format!("{}{:04X}", prefix, val & 0x3FFF);
+            let description = crate::dtc_db::lookup_description(&code).to_string();
             dtcs.push(DtcRecord {
                 code,
-                description: "Standard SAE Emission Trouble Code".into(),
+                description,
                 status: DtcStatus::Confirmed,
                 ecu_source: Some("GM ECM".into()),
             });

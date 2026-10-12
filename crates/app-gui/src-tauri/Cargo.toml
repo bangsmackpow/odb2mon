@@ -1,0 +1,25 @@
+[package]
+name = "odb2mon-app"
+version.workspace = true
+description = "Cross-Platform Vehicle Diagnostic Dashboard"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.2" }
+
+[dependencies]
+obd-core = { path = "../../obd-core" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tauri = { version = "2.12.3" }
+tauri-plugin-log = "2"

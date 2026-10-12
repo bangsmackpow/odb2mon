@@ -7,7 +7,7 @@
         Manufacturer='odb2mon Contributors'
         Language='1033'
         Codepage='1252'
-        Version='0.1.0'>
+        Version='0.2.0'>
 
         <Package Id='*' Keywords='Installer' Description="odb2mon Vehicle Diagnostics Installer"
             Comments='Cross-Platform OBD2/UDS Diagnostics' Manufacturer='odb2mon Contributors'
@@ -22,7 +22,10 @@
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='ProgramFiles64Folder' Name='PFiles'>
                 <Directory Id='APPLICATIONFOLDER' Name='odb2mon'>
-                    <Component Id='MainExecutable' Guid='8C757B3F-2621-4197-BF5C-CD78D00E26AA' Win64='yes'>
+                    <Component Id='GuiExecutable' Guid='A1B2C3D4-E5F6-47A1-8901-23456789ABCD' Win64='yes'>
+                        <File Id='odb2mon_app_exe' Name='odb2mon-app.exe' DiskId='1' Source='target\release\odb2mon-app.exe' KeyPath='yes'/>
+                    </Component>
+                    <Component Id='CliExecutable' Guid='8C757B3F-2621-4197-BF5C-CD78D00E26AA' Win64='yes'>
                         <File Id='obd_cli_exe' Name='obd-cli.exe' DiskId='1' Source='target\release\obd-cli.exe' KeyPath='yes'/>
                         <Environment Id="PATH" Name="PATH" Value="[APPLICATIONFOLDER]" Permanent="no" Part="last" Action="set" System="yes" />
                     </Component>
@@ -34,7 +37,8 @@
         </Directory>
 
         <Feature Id='Complete' Level='1'>
-            <ComponentRef Id='MainExecutable' />
+            <ComponentRef Id='GuiExecutable' />
+            <ComponentRef Id='CliExecutable' />
             <ComponentRef Id='ReadmeFile' />
         </Feature>
     </Product>

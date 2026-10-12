@@ -18,14 +18,13 @@ impl MockConnection {
             VehicleProfile::BmwF10_535i => vec![
                 DtcRecord {
                     code: "120408".into(),
-                    description:
-                        "Charging pressure control: Switch-off, pressure build-up disabled".into(),
+                    description: crate::dtc_db::lookup_description("120408").into(),
                     status: DtcStatus::Confirmed,
                     ecu_source: Some("DME".into()),
                 },
                 DtcRecord {
                     code: "130104".into(),
-                    description: "VANOS, intake: Camshaft angle not reached".into(),
+                    description: crate::dtc_db::lookup_description("130104").into(),
                     status: DtcStatus::Pending,
                     ecu_source: Some("DME".into()),
                 },
@@ -33,21 +32,20 @@ impl MockConnection {
             VehicleProfile::GmcAcadia_2010 => vec![
                 DtcRecord {
                     code: "P0008".into(),
-                    description: "Engine Positions System Performance Bank 1 (Timing Chain Slack)"
-                        .into(),
+                    description: crate::dtc_db::lookup_description("P0008").into(),
                     status: DtcStatus::Confirmed,
                     ecu_source: Some("ECM".into()),
                 },
                 DtcRecord {
                     code: "P0300".into(),
-                    description: "Random/Multiple Cylinder Misfire Detected".into(),
+                    description: crate::dtc_db::lookup_description("P0300").into(),
                     status: DtcStatus::Pending,
                     ecu_source: Some("ECM".into()),
                 },
             ],
             VehicleProfile::Simulator => vec![DtcRecord {
                 code: "P0128".into(),
-                description: "Coolant Thermostat (Coolant Temp Below Regulating Temp)".into(),
+                description: crate::dtc_db::lookup_description("P0128").into(),
                 status: DtcStatus::Confirmed,
                 ecu_source: Some("ECU".into()),
             }],
