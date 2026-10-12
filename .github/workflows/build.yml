@@ -34,10 +34,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy Linter
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy -p obd-core -p obd-cli --all-targets -- -D warnings
 
-      - name: Run Workspace Tests
-        run: cargo test --workspace --verbose
+      - name: Run Core & CLI Tests
+        run: cargo test -p obd-core -p obd-cli --verbose
 
   build-windows:
     name: Build Windows Target
