@@ -4,6 +4,8 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::{sleep, Duration};
 
+static FALLBACK_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
 /// Asynchronous dashboard engine that decouples vehicle bus I/O from UI rendering.
 pub struct VehicleManager {
     connection: Arc<Mutex<Box<dyn ObdConnection>>>,
@@ -38,7 +40,7 @@ impl VehicleManager {
         let snapshot_tx = self.snapshot_tx.clone();
         let event_tx = self.event_tx.clone();
 
-        tokio::spawn(async move {
+        let task = async move {
             tracing::info!(
                 "Starting background vehicle polling task at {:?}",
                 poll_interval
@@ -112,7 +114,20 @@ impl VehicleManager {
                 drop(conn);
                 sleep(poll_interval).await;
             }
-        })
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(task)
+        } else {
+            let rt = FALLBACK_RUNTIME.get_or_init(|| {
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .thread_name("odb2mon-poller")
+                    .build()
+                    .expect("Failed to initialize background Tokio runtime")
+            });
+            rt.spawn(task)
+        }
     }
 
     /// Clears vehicle diagnostic trouble codes across the abstraction layer.

@@ -120,6 +120,11 @@ pub fn run() {
             check_update
         ])
         .setup(|app| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+
             let app_handle = app.handle().clone();
 
             // Background telemetry stream at 10 Hz pushed to frontend webview
