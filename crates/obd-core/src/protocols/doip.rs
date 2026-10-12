@@ -42,7 +42,9 @@ pub fn build_routing_activation_request(tester_address: u16) -> Vec<u8> {
 /// Byte 12: Routing activation response code (0x10 = Successfully activated)
 pub fn verify_routing_activation_ack(frame: &[u8]) -> Result<(), ObdError> {
     if frame.len() < 13 {
-        return Err(ObdError::Protocol("DoIP Routing Activation response too short".into()));
+        return Err(ObdError::Protocol(
+            "DoIP Routing Activation response too short".into(),
+        ));
     }
 
     let payload_type = u16::from_be_bytes([frame[2], frame[3]]);
@@ -55,19 +57,39 @@ pub fn verify_routing_activation_ack(frame: &[u8]) -> Result<(), ObdError> {
     let code = frame[12];
     match code {
         0x10 => Ok(()), // Routing successfully activated
-        0x00 => Err(ObdError::ConnectionFailed("DoIP Routing: Unknown source address".into())),
-        0x01 => Err(ObdError::ConnectionFailed("DoIP Routing: All sockets registered".into())),
-        0x02 => Err(ObdError::ConnectionFailed("DoIP Routing: Source address mismatch".into())),
-        0x03 => Err(ObdError::ConnectionFailed("DoIP Routing: Source address already active".into())),
-        0x04 => Err(ObdError::ConnectionFailed("DoIP Routing: Missing authentication".into())),
-        0x05 => Err(ObdError::ConnectionFailed("DoIP Routing: Missing confirmation".into())),
-        0x06 => Err(ObdError::ConnectionFailed("DoIP Routing: Unsupported activation type".into())),
-        _ => Err(ObdError::ConnectionFailed(format!("DoIP Routing failed with code {code:#04X}"))),
+        0x00 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Unknown source address".into(),
+        )),
+        0x01 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: All sockets registered".into(),
+        )),
+        0x02 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Source address mismatch".into(),
+        )),
+        0x03 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Source address already active".into(),
+        )),
+        0x04 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Missing authentication".into(),
+        )),
+        0x05 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Missing confirmation".into(),
+        )),
+        0x06 => Err(ObdError::ConnectionFailed(
+            "DoIP Routing: Unsupported activation type".into(),
+        )),
+        _ => Err(ObdError::ConnectionFailed(format!(
+            "DoIP Routing failed with code {code:#04X}"
+        ))),
     }
 }
 
 /// Packs a UDS diagnostic request into an ISO 13400-2 Diagnostic Message (0x8001).
-pub fn build_diagnostic_message(source_address: u16, target_address: u16, uds_payload: &[u8]) -> Vec<u8> {
+pub fn build_diagnostic_message(
+    source_address: u16,
+    target_address: u16,
+    uds_payload: &[u8],
+) -> Vec<u8> {
     let payload_len = 4 + uds_payload.len();
     let header = build_doip_header(DOIP_DIAGNOSTIC_MESSAGE, payload_len as u32);
 
@@ -83,7 +105,9 @@ pub fn build_diagnostic_message(source_address: u16, target_address: u16, uds_pa
 /// Skips the 4-byte source and target addresses.
 pub fn extract_uds_payload(doip_payload: &[u8]) -> Result<Vec<u8>, ObdError> {
     if doip_payload.len() < 4 {
-        return Err(ObdError::ParseError("DoIP diagnostic payload too short".into()));
+        return Err(ObdError::ParseError(
+            "DoIP diagnostic payload too short".into(),
+        ));
     }
     // Skip 2 bytes source address, 2 bytes target address
     Ok(doip_payload[4..].to_vec())

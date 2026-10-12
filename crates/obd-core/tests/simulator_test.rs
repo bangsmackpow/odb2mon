@@ -20,16 +20,28 @@ async fn test_bmw_f10_mock_simulation() {
     }
 
     // Test BMW Oil Temperature reading (Supported)
-    let oil_val = conn.read_parameter(ParameterType::OilTemperature).await.unwrap();
+    let oil_val = conn
+        .read_parameter(ParameterType::OilTemperature)
+        .await
+        .unwrap();
     if let ParameterValue::TemperatureCelsius(temp) = oil_val {
-        assert!(temp >= 15.0 && temp <= 110.0, "Unexpected oil temp: {temp}");
+        assert!(
+            (15.0..=110.0).contains(&temp),
+            "Unexpected oil temp: {temp}"
+        );
     } else {
-        panic!("Expected TemperatureCelsius variant for BMW, got {:?}", oil_val);
+        panic!(
+            "Expected TemperatureCelsius variant for BMW, got {:?}",
+            oil_val
+        );
     }
 
     // Test BMW DTC reading
     let dtcs = conn.read_dtcs().await.unwrap();
-    assert!(!dtcs.is_empty(), "Expected BMW mock to return trouble codes");
+    assert!(
+        !dtcs.is_empty(),
+        "Expected BMW mock to return trouble codes"
+    );
     assert_eq!(dtcs[0].code, "120408");
 
     // Test DTC clear
@@ -50,12 +62,22 @@ async fn test_gmc_acadia_unsupported_oil_temp_graceful() {
     let rpm = conn.read_parameter(ParameterType::EngineRpm).await.unwrap();
     assert!(matches!(rpm, ParameterValue::Rpm(_)));
 
-    let coolant = conn.read_parameter(ParameterType::CoolantTemperature).await.unwrap();
+    let coolant = conn
+        .read_parameter(ParameterType::CoolantTemperature)
+        .await
+        .unwrap();
     assert!(matches!(coolant, ParameterValue::TemperatureCelsius(_)));
 
     // CRITICAL: Verify GMC Oil Temp returns Unsupported gracefully without failing
-    let oil = conn.read_parameter(ParameterType::OilTemperature).await.unwrap();
-    assert_eq!(oil, ParameterValue::Unsupported, "GMC Acadia must report Unsupported for oil temp");
+    let oil = conn
+        .read_parameter(ParameterType::OilTemperature)
+        .await
+        .unwrap();
+    assert_eq!(
+        oil,
+        ParameterValue::Unsupported,
+        "GMC Acadia must report Unsupported for oil temp"
+    );
 
     // Verify GM DTCs
     let dtcs = conn.read_dtcs().await.unwrap();
@@ -66,7 +88,7 @@ async fn test_gmc_acadia_unsupported_oil_temp_graceful() {
 async fn test_vehicle_manager_decoupled_snapshots() {
     let conn = Box::new(MockConnection::new(VehicleProfile::Simulator));
     let (manager, _event_rx) = VehicleManager::new(conn);
-    let mut subscriber = manager.subscribe();
+    let subscriber = manager.subscribe();
 
     let join_handle = manager.spawn_polling_loop(Duration::from_millis(20));
 

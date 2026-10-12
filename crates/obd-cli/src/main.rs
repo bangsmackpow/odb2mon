@@ -1,7 +1,4 @@
-use obd_core::{
-    EnetConnection, MockConnection, ObdConnection, ParameterType, ParameterValue,
-    VehicleManager, VehicleProfile,
-};
+use obd_core::{EnetConnection, MockConnection, ObdConnection, VehicleManager, VehicleProfile};
 use std::env;
 use std::time::Duration;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -22,7 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let connection: Box<dyn ObdConnection> = match mode {
         "enet" => {
-            let host = args.get(2).map(|s| s.to_string()).unwrap_or_else(|| "169.254.1.1".into());
+            let host = args
+                .get(2)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "169.254.1.1".into());
             let port = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(6801);
             println!("Targeting BMW F10 via ENET DoIP at {host}:{port}...");
             Box::new(EnetConnection::new(host, port, 0x0012))
@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("-----------------------------------------------------");
 
     let (manager, _event_rx) = VehicleManager::new(connection);
-    let mut rx = manager.subscribe();
+    let rx = manager.subscribe();
 
     let loop_handle = manager.spawn_polling_loop(Duration::from_millis(150));
 
@@ -57,7 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let snap = rx.borrow().clone();
 
         let oil_str = if snap.oil_temp_supported {
-            snap.oil_temp_c.map(|t| format!("{t:.1}°C")).unwrap_or_else(|| "--".into())
+            snap.oil_temp_c
+                .map(|t| format!("{t:.1}°C"))
+                .unwrap_or_else(|| "--".into())
         } else {
             "Unsupported (N/A)".into()
         };
@@ -65,16 +67,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "[{}] RPM: {:<5} | Speed: {:<3} km/h | Coolant: {:<5} | Oil: {}",
             snap.connection_status,
-            snap.rpm.map(|r| r.to_string()).unwrap_or_else(|| "--".into()),
-            snap.speed_kmh.map(|s| s.to_string()).unwrap_or_else(|| "--".into()),
-            snap.coolant_temp_c.map(|t| format!("{t:.1}°C")).unwrap_or_else(|| "--".into()),
+            snap.rpm
+                .map(|r| r.to_string())
+                .unwrap_or_else(|| "--".into()),
+            snap.speed_kmh
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "--".into()),
+            snap.coolant_temp_c
+                .map(|t| format!("{t:.1}°C"))
+                .unwrap_or_else(|| "--".into()),
             oil_str
         );
 
         if !snap.active_dtcs.is_empty() {
             println!("  Active Fault Codes:");
             for dtc in &snap.active_dtcs {
-                println!("    * {} - {} [{:?}]", dtc.code, dtc.description, dtc.status);
+                println!(
+                    "    * {} - {} [{:?}]",
+                    dtc.code, dtc.description, dtc.status
+                );
             }
         }
     }

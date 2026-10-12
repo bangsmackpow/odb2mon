@@ -34,7 +34,9 @@ pub fn parse_did_response(
     // Check for Negative Response Code (NRC)
     if payload[0] == 0x7F {
         if payload.len() < 3 {
-            return Err(ObdError::ParseError("Malformed UDS negative response".into()));
+            return Err(ObdError::ParseError(
+                "Malformed UDS negative response".into(),
+            ));
         }
         let service_id = payload[1];
         let nrc = payload[2];
@@ -44,7 +46,7 @@ pub fn parse_did_response(
     // Check for Positive Response (0x22 + 0x40 = 0x62)
     if payload[0] != 0x62 {
         return Err(ObdError::Protocol(format!(
-            "Unexpected response service ID: {:#02X}, expected 0x62",
+            "Unexpected response service ID: {:#04X}, expected 0x62",
             payload[0]
         )));
     }
@@ -65,20 +67,26 @@ pub fn parse_did_response(
         ParameterType::EngineRpm => {
             // BMW N55 2-byte RPM DID: (A * 256 + B) / 4
             if data.len() < 2 {
-                return Err(ObdError::ParseError("RPM data requires at least 2 bytes".into()));
+                return Err(ObdError::ParseError(
+                    "RPM data requires at least 2 bytes".into(),
+                ));
             }
             let raw = u16::from_be_bytes([data[0], data[1]]) as u32;
             Ok(ParameterValue::Rpm(raw / 4))
         }
         ParameterType::VehicleSpeed => {
             if data.is_empty() {
-                return Err(ObdError::ParseError("Speed data requires at least 1 byte".into()));
+                return Err(ObdError::ParseError(
+                    "Speed data requires at least 1 byte".into(),
+                ));
             }
             Ok(ParameterValue::SpeedKmh(data[0] as u32))
         }
         ParameterType::CoolantTemperature => {
             if data.is_empty() {
-                return Err(ObdError::ParseError("Coolant temp requires at least 1 byte".into()));
+                return Err(ObdError::ParseError(
+                    "Coolant temp requires at least 1 byte".into(),
+                ));
             }
             // BMW standard formula: raw - 48°C
             let temp = (data[0] as f32) - 48.0;
@@ -86,7 +94,9 @@ pub fn parse_did_response(
         }
         ParameterType::OilTemperature => {
             if data.is_empty() {
-                return Err(ObdError::ParseError("Oil temp requires at least 1 byte".into()));
+                return Err(ObdError::ParseError(
+                    "Oil temp requires at least 1 byte".into(),
+                ));
             }
             let temp = (data[0] as f32) - 48.0;
             Ok(ParameterValue::TemperatureCelsius(temp))
@@ -102,7 +112,10 @@ pub fn parse_dtc_response(payload: &[u8]) -> Result<Vec<DtcRecord>, ObdError> {
 
     if payload[0] == 0x7F {
         let nrc = payload.get(2).copied().unwrap_or(0x10);
-        return Err(ObdError::from_nrc(payload.get(1).copied().unwrap_or(0x19), nrc));
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x19),
+            nrc,
+        ));
     }
 
     // Positive response to 0x19 is 0x59
@@ -118,7 +131,7 @@ pub fn parse_dtc_response(payload: &[u8]) -> Result<Vec<DtcRecord>, ObdError> {
     let dtc_data = &payload[3..]; // Skip SID, Subfunction, and StatusAvailabilityMask
 
     // Each DTC record in ISO 14229 is 4 bytes: 3 bytes DTC Code + 1 byte Status
-    for chunk in dtc_data.chunks_exact(4) {
+    for chunk in dtc_data.as_chunks::<4>().0 {
         let code_hex = format!("{:02X}{:02X}{:02X}", chunk[0], chunk[1], chunk[2]);
         let status_byte = chunk[3];
         let status = if (status_byte & 0x08) != 0 {
@@ -166,7 +179,9 @@ mod tests {
         let payload = [0x7F, 0x22, 0x22];
         let err = parse_did_response(0xD001, ParameterType::EngineRpm, &payload).unwrap_err();
         match err {
-            ObdError::NegativeResponse { service_id, nrc, .. } => {
+            ObdError::NegativeResponse {
+                service_id, nrc, ..
+            } => {
                 assert_eq!(service_id, 0x22);
                 assert_eq!(nrc, 0x22);
             }

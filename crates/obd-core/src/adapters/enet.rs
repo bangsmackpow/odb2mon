@@ -1,12 +1,12 @@
-use async_trait::async_trait;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{DtcRecord, ParameterType, ParameterValue, VehicleProfile};
 use crate::protocols::doip;
 use crate::protocols::uds;
+use async_trait::async_trait;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::time::{timeout, Duration};
 
 /// BMW ENET (Ethernet-to-OBD2) adapter communicating via DoIP (ISO 13400) and UDS (ISO 14229).
 pub struct EnetConnection {
@@ -39,23 +39,23 @@ impl EnetConnection {
     async fn send_uds_request(&mut self, payload: &[u8]) -> Result<Vec<u8>, ObdError> {
         let stream = self.stream.as_mut().ok_or(ObdError::Disconnected)?;
 
-        let doip_frame = doip::build_diagnostic_message(
-            self.tester_address,
-            self.target_ecu,
-            payload,
-        );
+        let doip_frame =
+            doip::build_diagnostic_message(self.tester_address, self.target_ecu, payload);
 
         stream.write_all(&doip_frame).await?;
 
         // Read DoIP 8-byte header
         let mut header_buf = [0u8; 8];
-        timeout(Duration::from_millis(2000), stream.read_exact(&mut header_buf))
-            .await
-            .map_err(|_| ObdError::Timeout(Duration::from_millis(2000)))??;
+        timeout(
+            Duration::from_millis(2000),
+            stream.read_exact(&mut header_buf),
+        )
+        .await
+        .map_err(|_| ObdError::Timeout(Duration::from_millis(2000)))??;
 
-        let payload_len = u32::from_be_bytes([
-            header_buf[4], header_buf[5], header_buf[6], header_buf[7],
-        ]) as usize;
+        let payload_len =
+            u32::from_be_bytes([header_buf[4], header_buf[5], header_buf[6], header_buf[7]])
+                as usize;
 
         let mut payload_buf = vec![0u8; payload_len];
         stream.read_exact(&mut payload_buf).await?;
@@ -69,10 +69,14 @@ impl EnetConnection {
         let resp = self.send_uds_request(&req).await?;
         if resp.first() == Some(&0x50) {
             self.session_elevated = true;
-            tracing::info!("Successfully elevated BMW DME to Extended Diagnostic Session (0x10 0x03)");
+            tracing::info!(
+                "Successfully elevated BMW DME to Extended Diagnostic Session (0x10 0x03)"
+            );
             Ok(())
         } else {
-            Err(ObdError::Protocol("ECU rejected extended diagnostic session".into()))
+            Err(ObdError::Protocol(
+                "ECU rejected extended diagnostic session".into(),
+            ))
         }
     }
 }
@@ -127,9 +131,16 @@ impl ObdConnection for EnetConnection {
         let request = uds::build_read_did_request(did);
         let response = match self.send_uds_request(&request).await {
             Ok(resp) => resp,
-            Err(ObdError::NegativeResponse { service_id: 0x22, nrc: 0x22, .. }) => {
+            Err(ObdError::NegativeResponse {
+                service_id: 0x22,
+                nrc: 0x22,
+                ..
+            }) => {
                 // NRC 0x22 (ConditionsNotCorrect): Elevate session and retry once
-                tracing::warn!("Received NRC 0x22 for DID {:#04X}; attempting session elevation...", did);
+                tracing::warn!(
+                    "Received NRC 0x22 for DID {:#04X}; attempting session elevation...",
+                    did
+                );
                 self.elevate_to_extended_session().await?;
                 self.send_uds_request(&request).await?
             }

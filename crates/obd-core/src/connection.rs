@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use crate::error::ObdError;
 use crate::profile::{DtcRecord, ParameterType, ParameterValue, VehicleProfile};
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
 /// Connection lifecycle state.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

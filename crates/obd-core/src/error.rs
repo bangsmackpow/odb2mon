@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::profile::ParameterType;
+use thiserror::Error;
 
 /// Unified error enum for vehicle diagnostics, transport failures, and protocol parsing.
 #[derive(Debug, Error)]

@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use std::time::Instant;
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{DtcRecord, DtcStatus, ParameterType, ParameterValue, VehicleProfile};
+use async_trait::async_trait;
+use std::time::Instant;
 
 /// Realistic vehicle simulator for automated testing and CI/CD without physical vehicle hardware.
 pub struct MockConnection {
@@ -18,7 +18,8 @@ impl MockConnection {
             VehicleProfile::BmwF10_535i => vec![
                 DtcRecord {
                     code: "120408".into(),
-                    description: "Charging pressure control: Switch-off, pressure build-up disabled".into(),
+                    description:
+                        "Charging pressure control: Switch-off, pressure build-up disabled".into(),
                     status: DtcStatus::Confirmed,
                     ecu_source: Some("DME".into()),
                 },
@@ -32,7 +33,8 @@ impl MockConnection {
             VehicleProfile::GmcAcadia_2010 => vec![
                 DtcRecord {
                     code: "P0008".into(),
-                    description: "Engine Positions System Performance Bank 1 (Timing Chain Slack)".into(),
+                    description: "Engine Positions System Performance Bank 1 (Timing Chain Slack)"
+                        .into(),
                     status: DtcStatus::Confirmed,
                     ecu_source: Some("ECM".into()),
                 },
@@ -43,14 +45,12 @@ impl MockConnection {
                     ecu_source: Some("ECM".into()),
                 },
             ],
-            VehicleProfile::Simulator => vec![
-                DtcRecord {
-                    code: "P0128".into(),
-                    description: "Coolant Thermostat (Coolant Temp Below Regulating Temp)".into(),
-                    status: DtcStatus::Confirmed,
-                    ecu_source: Some("ECU".into()),
-                },
-            ],
+            VehicleProfile::Simulator => vec![DtcRecord {
+                code: "P0128".into(),
+                description: "Coolant Thermostat (Coolant Temp Below Regulating Temp)".into(),
+                status: DtcStatus::Confirmed,
+                ecu_source: Some("ECU".into()),
+            }],
         };
 
         Self {
@@ -67,7 +67,10 @@ impl ObdConnection for MockConnection {
     async fn connect(&mut self) -> Result<(), ObdError> {
         self.connected = true;
         self.start_time = Instant::now();
-        tracing::info!("Mock vehicle simulator connected for profile: {:?}", self.profile);
+        tracing::info!(
+            "Mock vehicle simulator connected for profile: {:?}",
+            self.profile
+        );
         Ok(())
     }
 

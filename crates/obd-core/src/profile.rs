@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Supported vehicle profiles with specific hardware, protocol, and DID/PID mappings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[allow(non_camel_case_types)]
 pub enum VehicleProfile {
     /// 2011 BMW 535i xDrive (F10 chassis, N55 engine).
     /// Communicates via UDS over DoIP (TCP/IP on port 6801). Target ECU is DME (logical address 0x12 or 0x01).

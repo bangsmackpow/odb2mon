@@ -116,7 +116,7 @@ pub fn parse_mode03_dtcs(raw_response: &str) -> Result<Vec<DtcRecord>, ObdError>
     let dtc_hex_stream = &clean[pos + 2..];
     let mut dtcs = Vec::new();
 
-    for chunk in dtc_hex_stream.as_bytes().chunks_exact(4) {
+    for chunk in dtc_hex_stream.as_bytes().as_chunks::<4>().0 {
         let pair_str = std::str::from_utf8(chunk).unwrap_or("");
         if pair_str == "0000" {
             continue; // Padding

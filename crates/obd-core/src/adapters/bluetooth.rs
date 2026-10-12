@@ -1,8 +1,8 @@
-use async_trait::async_trait;
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{DtcRecord, ParameterType, ParameterValue, VehicleProfile};
 use crate::protocols::elm327;
+use async_trait::async_trait;
 
 /// Bluetooth ELM327 adapter communicating via Serial AT commands and SAE J1979 / ISO 15765-4.
 pub struct BluetoothConnection {
@@ -44,13 +44,17 @@ impl BluetoothConnection {
 #[async_trait]
 impl ObdConnection for BluetoothConnection {
     async fn connect(&mut self) -> Result<(), ObdError> {
-        tracing::info!("Initializing ELM327 connection on {} at {} baud", self.port_name, self.baud_rate);
+        tracing::info!(
+            "Initializing ELM327 connection on {} at {} baud",
+            self.port_name,
+            self.baud_rate
+        );
 
         // Standard ELM327 protocol negotiation
         self.connected = true;
-        self.send_command("AT Z").await?;   // Reset device
-        self.send_command("AT E0").await?;  // Echo Off
-        self.send_command("AT L0").await?;  // Linefeeds Off
+        self.send_command("AT Z").await?; // Reset device
+        self.send_command("AT E0").await?; // Echo Off
+        self.send_command("AT L0").await?; // Linefeeds Off
         self.send_command("AT SP 0").await?; // Protocol: Automatic Search
 
         self.oil_temp_unsupported_cached = false;
