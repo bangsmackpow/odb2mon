@@ -1,0 +1,15 @@
+[package]
+name = "obd-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line diagnostic dashboard and validation tool for odb2mon"
+
+[dependencies]
+obd-core = { path = "../obd-core" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

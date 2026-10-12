@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/obd-core",
+    "crates/obd-cli"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["odb2mon Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bangsmackpow/odb2mon"
+
+[workspace.dependencies]
+tokio = { version = "1.43", features = ["full"] }
+async-trait = "0.1.86"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = "1.10"
+futures = "0.3"
