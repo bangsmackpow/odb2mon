@@ -390,7 +390,7 @@ impl ObdConnection for EnetConnection {
         let resp = self.send_uds_request_to_ecu(0x0018, &req).await?;
         let temp_c = uds::parse_transmission_temp_response(&resp)?;
         let temp_f = (temp_c * 9.0 / 5.0) + 32.0;
-        let is_within_fill_window = temp_c >= 40.0 && temp_c <= 50.0;
+        let is_within_fill_window = (40.0..=50.0).contains(&temp_c);
         let status_text = if temp_c < 40.0 {
             "COLD - Run engine to warm fluid to 40°C - 50°C".into()
         } else if temp_c <= 50.0 {

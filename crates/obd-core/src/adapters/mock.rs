@@ -505,7 +505,7 @@ impl ObdConnection for MockConnection {
             VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
                 let temp_c = self.trans_fluid_temp_c;
                 let temp_f = (temp_c * 9.0 / 5.0) + 32.0;
-                let is_within_fill_window = temp_c >= 40.0 && temp_c <= 50.0;
+                let is_within_fill_window = (40.0..=50.0).contains(&temp_c);
                 let status_text = if temp_c < 40.0 {
                     "COLD - Run engine to warm fluid to 40°C - 50°C".into()
                 } else if temp_c <= 50.0 {
