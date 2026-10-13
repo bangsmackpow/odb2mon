@@ -1,7 +1,8 @@
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue,
-    TopologyScanReport, TransmissionOilStatus, VehicleProfile, WaterPumpBleedStatus,
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EngineDatalogFrame, ParameterType,
+    ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
+    WaterPumpBleedStatus,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -121,6 +122,13 @@ pub trait ObdConnection: Send + Sync {
     async fn set_exhaust_flap(&mut self, _open: bool) -> Result<String, ObdError> {
         Err(ObdError::Unsupported(
             "Actuator routines are only supported on BMW UDS profiles".into(),
+        ))
+    }
+
+    /// Queries high-speed live engine datalog frame (Boost, EWG, Rail Pressure, Misfires, VANOS).
+    async fn read_engine_datalog(&mut self) -> Result<EngineDatalogFrame, ObdError> {
+        Err(ObdError::Unsupported(
+            "High-speed engine datalogging is only supported on BMW N55 UDS profiles".into(),
         ))
     }
 

@@ -99,3 +99,39 @@ A modern, high-performance cross-platform vehicle diagnostics application built 
   - Overrides engine cooling logic to test variable-speed PWM fan at 15% (Low), 50% (Medium), and 90% (High), with one-click return to automatic control.
 - **Muffler Exhaust Flap Actuator (Routine 0x0218 on DME):**
   - Actuates tailpipe flap between forced open (sport exhaust sound) and forced closed (quiet cold-start).
+
+---
+
+## 8. High-Speed N55 Engine Datalogging & Diagnostics
+High-frequency (20 - 50 Hz) live engine parameter acquisition over UDS DID `0xD100` directly from the Bosch MEVD1726 DME.
+
+### Telemetry Channels
+- **Boost Control:**
+  - **Target Boost (hPa / psi):** Calculated charge pressure setpoint based on driver torque request, air density, and knock limits.
+  - **Actual Boost (hPa / psi):** Pre-throttle charge pipe pressure measured by TMAP sensor.
+  - **Wastegate Duty Cycle (WGDC / EWG %):** Pneumatic solenoid duty (PWG) or actuator position (EWG).
+- **Fuel Delivery Systems:**
+  - **HPFP Rail Pressure (Target vs Actual, bar / psi):** Direct injection rail pressure. Normal: 50 bar (idle) to 200 bar (WOT).
+  - **LPFP Low Pressure (bar):** In-tank lift pump delivery pressure (5.0 - 5.5 bar).
+  - **Lambda (λ) / Air-Fuel Ratio:** Wideband O2 sensor equivalence ratio (0.84 - 1.00 λ).
+- **Air Intake & Ignition:**
+  - **Mass Air Flow (MAF, g/s):** Intake air volume mass flow rate.
+  - **Intake Air Temp (IAT, °C):** Post-intercooler charge air temperature.
+  - **Ignition Timing Advance (° CRK):** Cylinder 1 spark timing degrees before TDC.
+- **Combustion Health:**
+  - **Individual Cylinder Knock Retard (Cyl 1 - 6, ° CRK):** Timing pull applied by DME knock protection logic.
+  - **Cumulative Misfire Counters (Cyl 1 - 6):** Independent misfire detection counters.
+  - **VANOS Phasing (Target vs Actual, ° CRK):** Intake and exhaust variable camshaft timing.
+
+### Interactive Oscilloscope Chart & CSV Recording
+- **Real-Time Canvas Oscilloscope:** Multi-trace strip chart rendering Boost Target, Boost Actual, WGDC %, Fuel Rail Pressure, and Engine RPM with 50ms resolution.
+- **CSV Data Recording:** In-memory high-speed buffer exportable directly to disk (`odb2mon_n55_log_{timestamp}.csv`) or downloadable in-browser for analysis in Virtual Dyno or MegaLogViewer.
+
+---
+
+## 9. Windows Installer & Desktop Integration
+- **WiX Toolset Windows Installer (`.msi`):**
+  - Automatically installs `odb2mon-app.exe` (GUI) and `obd-cli.exe` (CLI).
+  - Registers `odb2mon` desktop shortcut on Windows user desktop.
+  - Sets system PATH environment variable to include the installation directory.
+

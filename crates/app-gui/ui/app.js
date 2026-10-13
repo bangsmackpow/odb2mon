@@ -131,6 +131,11 @@ function initApp() {
         fetchCbsReport();
         fetchActuatorsStatus();
       }
+      if (targetPage === 'datalog') {
+        startDatalogStream();
+      } else {
+        stopDatalogStream();
+      }
     });
   });
 
@@ -1050,6 +1055,375 @@ function initApp() {
       }
     });
   });
+
+  // Datalogger References
+  const btnStartLog = document.getElementById('btnStartLog');
+  const btnStopLog = document.getElementById('btnStopLog');
+  const btnDownloadCsv = document.getElementById('btnDownloadCsv');
+  const logRecordPill = document.getElementById('logRecordPill');
+  const datalogUnsupportedBanner = document.getElementById('datalogUnsupportedBanner');
+  const datalogCanvas = document.getElementById('datalogCanvas');
+
+  // Datalogger Legend & Readouts
+  const legendTargetBoost = document.getElementById('legendTargetBoost');
+  const legendActualBoost = document.getElementById('legendActualBoost');
+  const legendWgdc = document.getElementById('legendWgdc');
+  const legendRailPress = document.getElementById('legendRailPress');
+  const legendRpm = document.getElementById('legendRpm');
+
+  const valTargetBoost = document.getElementById('valTargetBoost');
+  const valTargetBoostHpa = document.getElementById('valTargetBoostHpa');
+  const valActualBoost = document.getElementById('valActualBoost');
+  const valActualBoostHpa = document.getElementById('valActualBoostHpa');
+  const boostDevBadge = document.getElementById('boostDevBadge');
+  const valWgdcText = document.getElementById('valWgdcText');
+  const wgdcBarFill = document.getElementById('wgdcBarFill');
+
+  const valRailTarget = document.getElementById('valRailTarget');
+  const valRailTargetPsi = document.getElementById('valRailTargetPsi');
+  const valRailActual = document.getElementById('valRailActual');
+  const valRailActualPsi = document.getElementById('valRailActualPsi');
+  const fuelHealthBadge = document.getElementById('fuelHealthBadge');
+  const valLpfp = document.getElementById('valLpfp');
+  const valLambda = document.getElementById('valLambda');
+
+  const valMaf = document.getElementById('valMaf');
+  const valIat = document.getElementById('valIat');
+  const valTiming = document.getElementById('valTiming');
+  const valLogSpeed = document.getElementById('valLogSpeed');
+
+  const knockBars = [
+    document.getElementById('knockBar1'),
+    document.getElementById('knockBar2'),
+    document.getElementById('knockBar3'),
+    document.getElementById('knockBar4'),
+    document.getElementById('knockBar5'),
+    document.getElementById('knockBar6'),
+  ];
+  const valKnocks = [
+    document.getElementById('valKnock1'),
+    document.getElementById('valKnock2'),
+    document.getElementById('valKnock3'),
+    document.getElementById('valKnock4'),
+    document.getElementById('valKnock5'),
+    document.getElementById('valKnock6'),
+  ];
+
+  const valMisfires = [
+    document.getElementById('valMisfire1'),
+    document.getElementById('valMisfire2'),
+    document.getElementById('valMisfire3'),
+    document.getElementById('valMisfire4'),
+    document.getElementById('valMisfire5'),
+    document.getElementById('valMisfire6'),
+  ];
+
+  const valVanosInTgt = document.getElementById('valVanosInTgt');
+  const valVanosInAct = document.getElementById('valVanosInAct');
+  const valVanosExTgt = document.getElementById('valVanosExTgt');
+  const valVanosExAct = document.getElementById('valVanosExAct');
+
+  let datalogHistory = [];
+  const MAX_DATALOG_POINTS = 120;
+  let datalogPollInterval = null;
+  let isRecordingDatalog = false;
+  let lastExportedCsv = null;
+
+  function drawDatalogChart() {
+    if (!datalogCanvas) return;
+    const ctx = datalogCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = datalogCanvas.width;
+    const height = datalogCanvas.height;
+
+    // Clear background
+    ctx.fillStyle = '#06080c';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw grid lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 1;
+
+    // Horizontal grid (5 rows)
+    for (let i = 1; i < 5; i++) {
+      const y = (height / 5) * i;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    // Vertical grid (6 columns)
+    for (let i = 1; i < 6; i++) {
+      const x = (width / 6) * i;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    if (datalogHistory.length < 2) return;
+
+    function scaleBoost(psi) {
+      const minPsi = -5;
+      const maxPsi = 25;
+      const norm = Math.max(0, Math.min(1, (psi - minPsi) / (maxPsi - minPsi)));
+      return height - norm * (height - 20) - 10;
+    }
+
+    function scaleRpm(rpm) {
+      const norm = Math.max(0, Math.min(1, rpm / 7000));
+      return height - norm * (height - 20) - 10;
+    }
+
+    function scaleWgdc(wgdc) {
+      const norm = Math.max(0, Math.min(1, wgdc / 100));
+      return height - norm * (height - 20) - 10;
+    }
+
+    function scaleRail(bar) {
+      const norm = Math.max(0, Math.min(1, bar / 220));
+      return height - norm * (height - 20) - 10;
+    }
+
+    const n = datalogHistory.length;
+    const stepX = width / (MAX_DATALOG_POINTS - 1);
+
+    function drawTrace(getter, strokeStyle, lineWidth, isDashed = false) {
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      if (isDashed) {
+        ctx.setLineDash([4, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const x = i * stepX;
+        const y = getter(datalogHistory[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 1. Engine RPM trace (Orange, faint background)
+    drawTrace(d => scaleRpm(d.engine_rpm), 'rgba(255, 145, 0, 0.45)', 1.5);
+
+    // 2. Rail Pressure trace (Purple)
+    drawTrace(d => scaleRail(d.rail_pressure_actual_bar), '#e040fb', 1.8);
+
+    // 3. WGDC % trace (Amber, dashed)
+    drawTrace(d => scaleWgdc(d.wastegate_duty_percent), '#ffb300', 1.5, true);
+
+    // 4. Boost Target trace (Cyan)
+    drawTrace(d => scaleBoost(d.boost_target_psi), '#00b0ff', 2);
+
+    // 5. Boost Actual trace (Bright Green)
+    drawTrace(d => scaleBoost(d.boost_actual_psi), '#00e676', 2.5);
+  }
+
+  function renderDatalogFrame(frame) {
+    if (!frame) return;
+
+    // Push into ring buffer
+    datalogHistory.push(frame);
+    if (datalogHistory.length > MAX_DATALOG_POINTS) {
+      datalogHistory.shift();
+    }
+
+    // Redraw graph
+    drawDatalogChart();
+
+    // Update legend
+    if (legendTargetBoost) legendTargetBoost.innerText = `${frame.boost_target_psi.toFixed(1)} psi`;
+    if (legendActualBoost) legendActualBoost.innerText = `${frame.boost_actual_psi.toFixed(1)} psi`;
+    if (legendWgdc) legendWgdc.innerText = `${frame.wastegate_duty_percent.toFixed(0)}%`;
+    if (legendRailPress) legendRailPress.innerText = `${frame.rail_pressure_actual_bar.toFixed(1)} bar`;
+    if (legendRpm) legendRpm.innerText = `${frame.engine_rpm} RPM`;
+
+    // Turbo tile
+    if (valTargetBoost) valTargetBoost.innerText = `${frame.boost_target_psi.toFixed(1)} psi`;
+    if (valTargetBoostHpa) valTargetBoostHpa.innerText = `${frame.boost_target_hpa.toFixed(0)} hPa`;
+    if (valActualBoost) valActualBoost.innerText = `${frame.boost_actual_psi.toFixed(1)} psi`;
+    if (valActualBoostHpa) valActualBoostHpa.innerText = `${frame.boost_actual_hpa.toFixed(0)} hPa`;
+
+    const boostDelta = Math.abs(frame.boost_actual_psi - frame.boost_target_psi);
+    if (boostDevBadge) {
+      if (boostDelta < 1.0) {
+        boostDevBadge.innerText = 'ON TARGET';
+        boostDevBadge.style.backgroundColor = 'rgba(0, 230, 118, 0.12)';
+        boostDevBadge.style.color = 'var(--accent-green)';
+      } else if (boostDelta < 2.5) {
+        boostDevBadge.innerText = `SPOOLING (Δ ${boostDelta.toFixed(1)} psi)`;
+        boostDevBadge.style.backgroundColor = 'rgba(255, 179, 0, 0.12)';
+        boostDevBadge.style.color = 'var(--accent-amber)';
+      } else {
+        boostDevBadge.innerText = `DEVIATION (Δ ${boostDelta.toFixed(1)} psi)`;
+        boostDevBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.12)';
+        boostDevBadge.style.color = 'var(--accent-red)';
+      }
+    }
+
+    if (valWgdcText) valWgdcText.innerText = `${frame.wastegate_duty_percent.toFixed(1)}%`;
+    if (wgdcBarFill) wgdcBarFill.style.width = `${Math.min(Math.max(frame.wastegate_duty_percent, 0), 100)}%`;
+
+    // Fuel tile
+    if (valRailTarget) valRailTarget.innerText = `${frame.rail_pressure_target_bar.toFixed(1)} bar`;
+    if (valRailTargetPsi) valRailTargetPsi.innerText = `(${Math.round(frame.rail_pressure_target_bar * 14.5038)} psi)`;
+    if (valRailActual) valRailActual.innerText = `${frame.rail_pressure_actual_bar.toFixed(1)} bar`;
+    if (valRailActualPsi) valRailActualPsi.innerText = `(${Math.round(frame.rail_pressure_actual_bar * 14.5038)} psi)`;
+
+    const railDelta = frame.rail_pressure_target_bar - frame.rail_pressure_actual_bar;
+    if (fuelHealthBadge) {
+      if (railDelta > 20.0) {
+        fuelHealthBadge.innerText = 'RAIL PRESSURE DIP';
+        fuelHealthBadge.style.backgroundColor = 'rgba(255, 23, 68, 0.15)';
+        fuelHealthBadge.style.color = 'var(--accent-red)';
+      } else {
+        fuelHealthBadge.innerText = 'HEALTHY';
+        fuelHealthBadge.style.backgroundColor = 'rgba(0, 230, 118, 0.12)';
+        fuelHealthBadge.style.color = 'var(--accent-green)';
+      }
+    }
+
+    if (valLpfp) valLpfp.innerText = `${frame.low_pressure_fuel_bar.toFixed(1)} bar`;
+    if (valLambda) valLambda.innerText = `${frame.lambda.toFixed(2)} λ (${(frame.lambda * 14.7).toFixed(1)} AFR)`;
+
+    // Air & Ignition
+    if (valMaf) valMaf.innerText = `${frame.mass_air_flow_gps.toFixed(1)} g/s`;
+    if (valIat) valIat.innerText = `${frame.intake_air_temp_c.toFixed(1)} °C`;
+    if (valTiming) valTiming.innerText = `${frame.ignition_timing_cyl1.toFixed(1)}° CRK`;
+    if (valLogSpeed) valLogSpeed.innerText = `${frame.vehicle_speed_kmh} km/h`;
+
+    // Knock Retard Cyl 1-6
+    for (let c = 0; c < 6; c++) {
+      const kr = frame.knock_retard[c] || 0.0;
+      if (valKnocks[c]) {
+        valKnocks[c].innerText = `${kr.toFixed(1)}°`;
+        if (kr === 0.0) {
+          valKnocks[c].style.color = 'var(--accent-green)';
+        } else if (kr > -2.0) {
+          valKnocks[c].style.color = 'var(--accent-amber)';
+        } else {
+          valKnocks[c].style.color = 'var(--accent-red)';
+        }
+      }
+      if (knockBars[c]) {
+        const pct = Math.min(Math.abs(kr) / 6.0, 1.0) * 100;
+        knockBars[c].style.width = `${pct}%`;
+        knockBars[c].style.backgroundColor = kr === 0 ? 'var(--accent-green)' : (kr > -2.0 ? 'var(--accent-amber)' : 'var(--accent-red)');
+      }
+    }
+
+    // Misfires Cyl 1-6
+    for (let m = 0; m < 6; m++) {
+      const count = frame.misfire_counts[m] || 0;
+      if (valMisfires[m]) {
+        valMisfires[m].innerText = count;
+        valMisfires[m].className = count === 0 ? 'misfire-val ok' : 'misfire-val fault';
+      }
+    }
+
+    // VANOS
+    if (valVanosInTgt) valVanosInTgt.innerText = `${frame.vanos_intake_target_deg.toFixed(1)}°`;
+    if (valVanosInAct) valVanosInAct.innerText = `${frame.vanos_intake_actual_deg.toFixed(1)}°`;
+    if (valVanosExTgt) valVanosExTgt.innerText = `${frame.vanos_exhaust_target_deg.toFixed(1)}°`;
+    if (valVanosExAct) valVanosExAct.innerText = `${frame.vanos_exhaust_actual_deg.toFixed(1)}°`;
+  }
+
+  async function fetchDatalogFrame() {
+    try {
+      const frame = await callBackend('get_engine_datalog');
+      if (datalogUnsupportedBanner) datalogUnsupportedBanner.style.display = 'none';
+      renderDatalogFrame(frame);
+
+      if (isRecordingDatalog) {
+        const status = await callBackend('get_datalog_status');
+        if (status && status.is_recording) {
+          if (logRecordPill) {
+            logRecordPill.innerText = `🔴 RECORDING (${status.elapsed_seconds.toFixed(1)}s, ${status.sample_count} samples)`;
+            logRecordPill.className = 'datalog-record-pill recording';
+          }
+        }
+      }
+    } catch (err) {
+      if (datalogUnsupportedBanner) datalogUnsupportedBanner.style.display = 'block';
+    }
+  }
+
+  function startDatalogStream() {
+    if (!datalogPollInterval) {
+      datalogPollInterval = setInterval(fetchDatalogFrame, 80);
+      fetchDatalogFrame();
+    }
+  }
+
+  function stopDatalogStream() {
+    if (datalogPollInterval && !isRecordingDatalog) {
+      clearInterval(datalogPollInterval);
+      datalogPollInterval = null;
+    }
+  }
+
+  if (btnStartLog) {
+    btnStartLog.addEventListener('click', async () => {
+      try {
+        await callBackend('start_datalog_recording');
+        isRecordingDatalog = true;
+        btnStartLog.style.display = 'none';
+        btnStopLog.style.display = 'inline-block';
+        if (btnDownloadCsv) btnDownloadCsv.style.display = 'none';
+        if (logRecordPill) {
+          logRecordPill.innerText = '🔴 RECORDING (0.0s, 0 samples)';
+          logRecordPill.className = 'datalog-record-pill recording';
+        }
+        startDatalogStream();
+      } catch (err) {
+        alert('Failed to start datalog recording: ' + err);
+      }
+    });
+  }
+
+  if (btnStopLog) {
+    btnStopLog.addEventListener('click', async () => {
+      try {
+        const summary = await callBackend('stop_datalog_recording');
+        isRecordingDatalog = false;
+        btnStartLog.style.display = 'inline-block';
+        btnStopLog.style.display = 'none';
+        if (btnDownloadCsv) btnDownloadCsv.style.display = 'inline-block';
+        lastExportedCsv = summary.csv_content;
+        if (logRecordPill) {
+          const pathMsg = summary.saved_file_path ? ` - Saved to ${summary.saved_file_path}` : '';
+          logRecordPill.innerText = `IDLE / EXPORTED (${summary.sample_count} samples in ${summary.duration_seconds.toFixed(1)}s${pathMsg})`;
+          logRecordPill.className = 'datalog-record-pill';
+        }
+      } catch (err) {
+        alert('Failed to stop recording: ' + err);
+      }
+    });
+  }
+
+  if (btnDownloadCsv) {
+    btnDownloadCsv.addEventListener('click', () => {
+      if (!lastExportedCsv) {
+        alert('No exported CSV log available');
+        return;
+      }
+      const blob = new Blob([lastExportedCsv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `bimmermon_n55_datalog_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+  }
 
   // Event Push Listener
   listenToEvent('telemetry-update', event => {

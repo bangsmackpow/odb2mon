@@ -1,10 +1,21 @@
 use crate::connection::ObdConnection;
-use crate::profile::{DashboardSnapshot, ParameterType, ParameterValue};
+use crate::profile::{
+    DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus, EngineDatalogFrame,
+    ParameterType, ParameterValue,
+};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{mpsc, watch, Mutex};
 use tokio::time::{sleep, Duration};
 
 static FALLBACK_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+#[derive(Default)]
+struct DatalogSession {
+    is_recording: bool,
+    start_time: Option<Instant>,
+    frames: Vec<EngineDatalogFrame>,
+}
 
 /// Asynchronous dashboard engine that decouples vehicle bus I/O from UI rendering.
 pub struct VehicleManager {
@@ -12,6 +23,7 @@ pub struct VehicleManager {
     snapshot_tx: watch::Sender<DashboardSnapshot>,
     snapshot_rx: watch::Receiver<DashboardSnapshot>,
     event_tx: mpsc::Sender<String>,
+    datalog_session: Arc<Mutex<DatalogSession>>,
 }
 
 impl VehicleManager {
@@ -24,6 +36,7 @@ impl VehicleManager {
             snapshot_tx,
             snapshot_rx,
             event_tx,
+            datalog_session: Arc::new(Mutex::new(DatalogSession::default())),
         };
 
         (manager, event_rx)
@@ -222,5 +235,125 @@ impl VehicleManager {
     pub async fn set_exhaust_flap(&self, open: bool) -> Result<String, crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
         conn.set_exhaust_flap(open).await
+    }
+
+    /// Queries high-speed live engine datalog frame. If recording is active, buffers frame.
+    pub async fn read_engine_datalog(&self) -> Result<EngineDatalogFrame, crate::error::ObdError> {
+        let frame = {
+            let mut conn = self.connection.lock().await;
+            if !conn.is_connected() {
+                conn.connect().await?;
+            }
+            conn.read_engine_datalog().await?
+        };
+
+        let mut session = self.datalog_session.lock().await;
+        if session.is_recording {
+            session.frames.push(frame.clone());
+        }
+        Ok(frame)
+    }
+
+    /// Starts in-memory datalog recording session.
+    pub async fn start_datalog_recording(&self) -> Result<String, crate::error::ObdError> {
+        let mut session = self.datalog_session.lock().await;
+        session.is_recording = true;
+        session.start_time = Some(Instant::now());
+        session.frames.clear();
+        Ok("High-speed datalog recording initiated.".into())
+    }
+
+    /// Stops datalog recording, generates CSV representation, and returns summary.
+    pub async fn stop_datalog_recording(
+        &self,
+    ) -> Result<DatalogRecordingSummary, crate::error::ObdError> {
+        let mut session = self.datalog_session.lock().await;
+        session.is_recording = false;
+        let duration = session
+            .start_time
+            .map(|t| t.elapsed().as_secs_f32())
+            .unwrap_or(0.0);
+        let sample_count = session.frames.len();
+
+        let mut csv = String::from("timestamp_ms,rpm,speed_kmh,boost_target_hpa,boost_actual_hpa,boost_target_psi,boost_actual_psi,wgdc_pct,rail_target_bar,rail_actual_bar,lpfp_bar,lambda,iat_c,maf_gps,timing_cyl1,knock_cyl1,knock_cyl2,knock_cyl3,knock_cyl4,knock_cyl5,knock_cyl6,misfire_cyl1,misfire_cyl2,misfire_cyl3,misfire_cyl4,misfire_cyl5,misfire_cyl6,vanos_in_tgt,vanos_in_act,vanos_ex_tgt,vanos_ex_act\n");
+
+        for f in &session.frames {
+            csv.push_str(&format!(
+                "{},{},{},{:.1},{:.1},{:.2},{:.2},{:.1},{:.1},{:.1},{:.1},{:.2},{:.1},{:.1},{:.1},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{},{},{},{},{},{},{:.1},{:.1},{:.1},{:.1}\n",
+                f.timestamp_ms,
+                f.engine_rpm,
+                f.vehicle_speed_kmh,
+                f.boost_target_hpa,
+                f.boost_actual_hpa,
+                f.boost_target_psi,
+                f.boost_actual_psi,
+                f.wastegate_duty_percent,
+                f.rail_pressure_target_bar,
+                f.rail_pressure_actual_bar,
+                f.low_pressure_fuel_bar,
+                f.lambda,
+                f.intake_air_temp_c,
+                f.mass_air_flow_gps,
+                f.ignition_timing_cyl1,
+                f.knock_retard[0],
+                f.knock_retard[1],
+                f.knock_retard[2],
+                f.knock_retard[3],
+                f.knock_retard[4],
+                f.knock_retard[5],
+                f.misfire_counts[0],
+                f.misfire_counts[1],
+                f.misfire_counts[2],
+                f.misfire_counts[3],
+                f.misfire_counts[4],
+                f.misfire_counts[5],
+                f.vanos_intake_target_deg,
+                f.vanos_intake_actual_deg,
+                f.vanos_exhaust_target_deg,
+                f.vanos_exhaust_actual_deg,
+            ));
+        }
+
+        let now_sec = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let file_path = format!("odb2mon_n55_log_{now_sec}.csv");
+        let saved_path = if std::fs::write(&file_path, &csv).is_ok() {
+            Some(file_path)
+        } else {
+            None
+        };
+
+        Ok(DatalogRecordingSummary {
+            sample_count,
+            duration_seconds: duration,
+            csv_content: csv,
+            saved_file_path: saved_path,
+        })
+    }
+
+    /// Queries datalogger recording state and elapsed metrics.
+    pub async fn get_datalog_status(&self) -> Result<DataloggerStatus, crate::error::ObdError> {
+        let conn = self.connection.lock().await;
+        let supported = match conn.profile() {
+            crate::profile::VehicleProfile::BmwF10_535i
+            | crate::profile::VehicleProfile::Simulator => true,
+            crate::profile::VehicleProfile::GmcAcadia_2010 => false,
+        };
+        drop(conn);
+
+        let session = self.datalog_session.lock().await;
+        let elapsed = session
+            .start_time
+            .map(|t| t.elapsed().as_secs_f32())
+            .unwrap_or(0.0);
+
+        Ok(DataloggerStatus {
+            supported,
+            is_recording: session.is_recording,
+            sample_count: session.frames.len(),
+            elapsed_seconds: if session.is_recording { elapsed } else { 0.0 },
+        })
     }
 }

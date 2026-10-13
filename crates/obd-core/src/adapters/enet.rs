@@ -1,8 +1,8 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EcuHealth, EcuNode, ParameterType,
-    ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EcuHealth, EcuNode, EngineDatalogFrame,
+    ParameterType, ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
     WaterPumpBleedStatus,
 };
 use crate::protocols::doip;
@@ -439,6 +439,17 @@ impl ObdConnection for EnetConnection {
         } else {
             Ok("Exhaust flapper valve commanded CLOSED (Quiet sound).".into())
         }
+    }
+
+    async fn read_engine_datalog(&mut self) -> Result<EngineDatalogFrame, ObdError> {
+        let req = uds::build_read_did_request(uds::DID_BMW_N55_DATALOG);
+        let resp = self.send_uds_request(&req).await?;
+        let mut frame = uds::parse_n55_datalog_response(&resp)?;
+        frame.timestamp_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        Ok(frame)
     }
 
     fn profile(&self) -> VehicleProfile {

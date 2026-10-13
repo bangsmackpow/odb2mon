@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.6.0</span>
+        <span class="version-badge" id="appVersion">v0.7.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -27,6 +27,9 @@
         </button>
         <button class="nav-btn" data-page="service">
           <span class="icon">⚡</span> BMW SERVICE
+        </button>
+        <button class="nav-btn" data-page="datalog">
+          <span class="icon">📈</span> DATALOGGER
         </button>
         <button class="nav-btn" data-page="profiles">
           <span class="icon">⚙</span> PROFILES
@@ -455,7 +458,214 @@
         </div>
       </section>
 
-      <!-- 4. VEHICLE PROFILES VIEW -->
+      <!-- 5. HIGH-SPEED N55 DATALOGGER & ENGINE TELEMETRY VIEW -->
+      <section id="page-datalog" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>HIGH-SPEED N55 ENGINE DATALOGGER</h2>
+            <p>Live multi-channel telemetry: Target vs Actual Boost, Wastegate duty, HPFP Rail Pressure, Knock Retard, Cyl 1-6 Misfires, and VANOS camshaft timing</p>
+          </div>
+          <div class="toolbar-actions">
+            <span class="datalog-record-pill" id="logRecordPill">IDLE / READY</span>
+            <button class="btn btn-primary" id="btnStartLog">⏺ START RECORDING</button>
+            <button class="btn btn-danger" id="btnStopLog" style="display: none;">⏹ STOP & EXPORT CSV</button>
+            <button class="btn btn-secondary" id="btnDownloadCsv" style="display: none;">💾 DOWNLOAD CSV</button>
+          </div>
+        </div>
+
+        <div id="datalogUnsupportedBanner" class="alert-banner warning" style="display: none;">
+          <strong>⚠️ Datalogging Unsupported:</strong> Active vehicle profile does not support high-speed UDS engine telemetry. Connect to BMW F10 via ENET (DoIP) or Simulator.
+        </div>
+
+        <div class="datalog-canvas-card">
+          <div class="datalog-canvas-header">
+            <div class="datalog-legend">
+              <span class="legend-pill" style="border-color: #00b0ff; color: #00b0ff;">
+                <span class="dot" style="background-color: #00b0ff;"></span> Target Boost: <strong id="legendTargetBoost">-- psi</strong>
+              </span>
+              <span class="legend-pill" style="border-color: #00e676; color: #00e676;">
+                <span class="dot" style="background-color: #00e676;"></span> Actual Boost: <strong id="legendActualBoost">-- psi</strong>
+              </span>
+              <span class="legend-pill" style="border-color: #ffb300; color: #ffb300;">
+                <span class="dot" style="background-color: #ffb300;"></span> WGDC: <strong id="legendWgdc">--%</strong>
+              </span>
+              <span class="legend-pill" style="border-color: #e040fb; color: #e040fb;">
+                <span class="dot" style="background-color: #e040fb;"></span> Rail Pressure: <strong id="legendRailPress">-- bar</strong>
+              </span>
+              <span class="legend-pill" style="border-color: #ff9100; color: #ff9100;">
+                <span class="dot" style="background-color: #ff9100;"></span> Engine RPM: <strong id="legendRpm">--</strong>
+              </span>
+            </div>
+            <div class="datalog-time-scale">50ms / sample (20 Hz)</div>
+          </div>
+          <canvas id="datalogCanvas" width="900" height="240" class="datalog-canvas"></canvas>
+        </div>
+
+        <!-- Telemetry Overview Cards Grid -->
+        <div class="datalog-grid">
+          <!-- Card 1: Turbo & Boost Pressure -->
+          <div class="datalog-card">
+            <div class="datalog-card-title">
+              <span>🚀 TURBOCHARGER & CHARGE AIR</span>
+              <span class="datalog-card-badge" id="boostDevBadge">ON TARGET</span>
+            </div>
+            <div class="datalog-stat-row">
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">TARGET BOOST</span>
+                <span class="datalog-stat-val highlight-blue" id="valTargetBoost">-- psi</span>
+                <span class="datalog-stat-sub" id="valTargetBoostHpa">-- hPa</span>
+              </div>
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">ACTUAL BOOST</span>
+                <span class="datalog-stat-val highlight-green" id="valActualBoost">-- psi</span>
+                <span class="datalog-stat-sub" id="valActualBoostHpa">-- hPa</span>
+              </div>
+            </div>
+            <div class="datalog-wgdc-container">
+              <div class="datalog-wgdc-header">
+                <span>WASTEGATE DUTY CYCLE (WGDC / EWG)</span>
+                <strong id="valWgdcText">--%</strong>
+              </div>
+              <div class="datalog-bar-bg">
+                <div class="datalog-bar-fill" id="wgdcBarFill" style="width: 0%; background: linear-gradient(90deg, #ffb300, #ff9100);"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Fuel Delivery Systems -->
+          <div class="datalog-card">
+            <div class="datalog-card-title">
+              <span>⛽ HIGH & LOW PRESSURE FUEL</span>
+              <span class="datalog-card-badge" id="fuelHealthBadge">HEALTHY</span>
+            </div>
+            <div class="datalog-stat-row">
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">HPFP TARGET</span>
+                <span class="datalog-stat-val highlight-purple" id="valRailTarget">-- bar</span>
+                <span class="datalog-stat-sub" id="valRailTargetPsi">-- psi</span>
+              </div>
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">HPFP ACTUAL</span>
+                <span class="datalog-stat-val highlight-purple" id="valRailActual">-- bar</span>
+                <span class="datalog-stat-sub" id="valRailActualPsi">-- psi</span>
+              </div>
+            </div>
+            <div class="datalog-stat-row" style="margin-top: 10px;">
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">LPFP FEED PRESSURE</span>
+                <span class="datalog-stat-val" id="valLpfp">-- bar</span>
+              </div>
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">LAMBDA / EQUIVALENCE</span>
+                <span class="datalog-stat-val" id="valLambda">-- λ</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Air Flow & Ignition Timing -->
+          <div class="datalog-card">
+            <div class="datalog-card-title">
+              <span>💨 AIR INTAKE & IGNITION</span>
+            </div>
+            <div class="datalog-stat-row">
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">MASS AIR FLOW (MAF)</span>
+                <span class="datalog-stat-val" id="valMaf">-- g/s</span>
+              </div>
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">INTAKE AIR TEMP (IAT)</span>
+                <span class="datalog-stat-val" id="valIat">-- °C</span>
+              </div>
+            </div>
+            <div class="datalog-stat-row" style="margin-top: 10px;">
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">CYL 1 IGNITION TIMING</span>
+                <span class="datalog-stat-val highlight-amber" id="valTiming">-- ° CRK</span>
+              </div>
+              <div class="datalog-stat-item">
+                <span class="datalog-stat-label">VEHICLE SPEED</span>
+                <span class="datalog-stat-val" id="valLogSpeed">-- km/h</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lower Diagnostic Row: Knock Retard, Misfires, VANOS -->
+        <div class="datalog-lower-grid">
+          <!-- Knock Correction Per Cylinder -->
+          <div class="datalog-subcard">
+            <h4>⚡ INDIVIDUAL CYLINDER KNOCK RETARD (° CRK)</h4>
+            <div class="knock-cylinders-grid">
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 1</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar1"></div></div>
+                <span class="cyl-val" id="valKnock1">0.0°</span>
+              </div>
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 2</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar2"></div></div>
+                <span class="cyl-val" id="valKnock2">0.0°</span>
+              </div>
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 3</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar3"></div></div>
+                <span class="cyl-val" id="valKnock3">0.0°</span>
+              </div>
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 4</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar4"></div></div>
+                <span class="cyl-val" id="valKnock4">0.0°</span>
+              </div>
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 5</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar5"></div></div>
+                <span class="cyl-val" id="valKnock5">0.0°</span>
+              </div>
+              <div class="knock-cyl-item">
+                <span class="cyl-label">CYL 6</span>
+                <div class="cyl-meter-bg"><div class="cyl-meter-fill" id="knockBar6"></div></div>
+                <span class="cyl-val" id="valKnock6">0.0°</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Misfire Counters -->
+          <div class="datalog-subcard">
+            <h4>🔥 CUMULATIVE COMBUSTION MISFIRES</h4>
+            <div class="misfires-cylinders-grid">
+              <div class="misfire-box"><span class="misfire-label">CYL 1</span><strong class="misfire-val ok" id="valMisfire1">0</strong></div>
+              <div class="misfire-box"><span class="misfire-label">CYL 2</span><strong class="misfire-val ok" id="valMisfire2">0</strong></div>
+              <div class="misfire-box"><span class="misfire-label">CYL 3</span><strong class="misfire-val ok" id="valMisfire3">0</strong></div>
+              <div class="misfire-box"><span class="misfire-label">CYL 4</span><strong class="misfire-val ok" id="valMisfire4">0</strong></div>
+              <div class="misfire-box"><span class="misfire-label">CYL 5</span><strong class="misfire-val ok" id="valMisfire5">0</strong></div>
+              <div class="misfire-box"><span class="misfire-label">CYL 6</span><strong class="misfire-val ok" id="valMisfire6">0</strong></div>
+            </div>
+          </div>
+
+          <!-- VANOS Camshaft Timing -->
+          <div class="datalog-subcard">
+            <h4>⚙ VANOS VARIABLE CAMSHAFT PHASING</h4>
+            <div class="vanos-grid">
+              <div class="vanos-cam-box">
+                <span class="vanos-cam-title">INTAKE CAMSHAFT</span>
+                <div class="vanos-stat-row">
+                  <div><span class="vanos-lbl">Target:</span> <strong id="valVanosInTgt">--°</strong></div>
+                  <div><span class="vanos-lbl">Actual:</span> <strong id="valVanosInAct">--°</strong></div>
+                </div>
+              </div>
+              <div class="vanos-cam-box">
+                <span class="vanos-cam-title">EXHAUST CAMSHAFT</span>
+                <div class="vanos-stat-row">
+                  <div><span class="vanos-lbl">Target:</span> <strong id="valVanosExTgt">--°</strong></div>
+                  <div><span class="vanos-lbl">Actual:</span> <strong id="valVanosExAct">--°</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. VEHICLE PROFILES VIEW -->
       <section id="page-profiles" class="page">
         <div class="section-toolbar">
           <div class="toolbar-title">
@@ -543,6 +753,7 @@
             <button class="doc-link" data-doc="battery">⚡ Battery & IBS Power Management</button>
             <button class="doc-link" data-doc="cbs">📋 Condition Based Service (CBS)</button>
             <button class="doc-link" data-doc="actuators">💧 Actuator Service Routines</button>
+            <button class="doc-link" data-doc="datalogger">📈 N55 High-Speed Datalogging</button>
             <button class="doc-link" data-doc="hardware">⚙ Hardware Setup & Cable Wiring</button>
           </aside>
 
@@ -693,7 +904,45 @@
               </div>
             </article>
 
-            <!-- Article 8: Hardware -->
+            <!-- Article 8: N55 High-Speed Datalogging -->
+            <article class="doc-article" id="doc-datalogger">
+              <h3>BMW N55 High-Speed Datalogging & Advanced Engine Diagnostics</h3>
+              <p>Provides high-frequency (20 - 50 Hz) interrogation of Bosch MEVD1726 DME internal engineering registers over ENET (ISO 13400 DoIP / ISO 14229 UDS DID <code>0xD100</code>). Eliminates the bandwidth bottlenecks and PID latency of generic SAE J1979 emissions OBD-II.</p>
+
+              <div class="doc-card">
+                <h4>Turbocharger & Boost Control</h4>
+                <ul>
+                  <li><strong>Target Boost (hPa / psi):</strong> The DME's dynamic charge pressure calculation based on driver torque demand, ambient pressure, charge air temperature, and knock adaptation.</li>
+                  <li><strong>Actual Boost (hPa / psi):</strong> Charge pipe absolute pressure measured by the TMAP sensor ahead of the throttle valve.</li>
+                  <li><strong>Wastegate Duty Cycle (WGDC %):</strong> Commanded pneumatic wastegate solenoid duty (PWG on 2011 F10) or electronic wastegate actuator position (EWG on late N55). During initial spool, WGDC approaches 80 - 85%; during sustained boost, it modulates between 55% - 70%.</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>Fuel Delivery Telemetry</h4>
+                <ul>
+                  <li><strong>HPFP Rail Pressure (Target vs Actual, bar):</strong> Direct injection rail pressure. Normal idle: ~50 bar (725 psi). Wide-open throttle (WOT): 150 - 200 bar (2,175 - 2,900 psi). A pressure drop below 130 bar during high RPM pull indicates a weakening High Pressure Fuel Pump.</li>
+                  <li><strong>LPFP Feed Pressure (bar):</strong> Tank delivery pump pressure feeding the engine bay HPFP. Normal range: 5.0 - 5.5 bar. Drops below 4.5 bar signify in-tank pump or fuel filter restriction.</li>
+                  <li><strong>Lambda (λ) / Air-Fuel Ratio:</strong> Measured by the upstream wideband oxygen sensor. Normal cruising: 1.00 λ (14.7 AFR). WOT acceleration: 0.82 - 0.88 λ (12.0 - 13.0 AFR).</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>Combustion Health & Knock Adaptation</h4>
+                <ul>
+                  <li><strong>Individual Cylinder Knock Retard (° CRK):</strong> Real-time ignition timing retard per cylinder (Cyl 1 - 6) triggered by the dual block-mounted knock sensors. Zero degrees indicates optimal timing; corrections between -1.0° and -3.0° indicate minor fuel octane deficiency or elevated intake air temperatures; corrections greater than -3.0° suggest pre-ignition risk.</li>
+                  <li><strong>Individual Cylinder Misfire Counters:</strong> Cumulative combustion misfire events recorded per cylinder since ignition cycle start. Crucial for pinpointing weak ignition coils, fouled spark plugs, or leaking direct injectors.</li>
+                  <li><strong>VANOS Camshaft Timing (° CRK):</strong> Target vs Actual angular phasing for Intake and Exhaust camshafts. Target tracking within ±1.5° CRK confirms healthy VANOS solenoids and non-sticking camshaft central valves.</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>Recording Sessions & CSV Export</h4>
+                <p>Clicking <strong>START RECORDING</strong> streams all 31 engine channels into a high-performance ring buffer. On <strong>STOP & EXPORT CSV</strong>, odb2mon generates an RFC 4180 compliant CSV file saved to disk and provides instant browser download for analysis in third-party data visualization tools (Virtual Dyno, MegaLogViewer, or Excel).</p>
+              </div>
+            </article>
+
+            <!-- Article 9: Hardware -->
             <article class="doc-article" id="doc-hardware">
               <h3>Hardware Setup & Cable Wiring</h3>
               <div class="doc-card">

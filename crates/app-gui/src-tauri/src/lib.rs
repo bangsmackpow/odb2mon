@@ -1,8 +1,8 @@
 use obd_core::{
     check_for_updates, BatteryStatus, BluetoothConnection, CbsItemType, CbsReport,
-    DashboardSnapshot, DtcRecord, EnetConnection, MockConnection, ObdConnection,
-    TopologyScanReport, TransmissionOilStatus, UpdateInfo, VehicleManager, VehicleProfile,
-    WaterPumpBleedStatus,
+    DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus, DtcRecord, EnetConnection,
+    EngineDatalogFrame, MockConnection, ObdConnection, TopologyScanReport, TransmissionOilStatus,
+    UpdateInfo, VehicleManager, VehicleProfile, WaterPumpBleedStatus,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -196,6 +196,36 @@ async fn set_exhaust_flap(open: bool, state: State<'_, AppState>) -> Result<Stri
     mgr.set_exhaust_flap(open).await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn get_engine_datalog(state: State<'_, AppState>) -> Result<EngineDatalogFrame, String> {
+    let mgr = state.manager.lock().await;
+    mgr.read_engine_datalog().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn start_datalog_recording(state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.start_datalog_recording()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn stop_datalog_recording(
+    state: State<'_, AppState>,
+) -> Result<DatalogRecordingSummary, String> {
+    let mgr = state.manager.lock().await;
+    mgr.stop_datalog_recording()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_datalog_status(state: State<'_, AppState>) -> Result<DataloggerStatus, String> {
+    let mgr = state.manager.lock().await;
+    mgr.get_datalog_status().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Default initial connection to realistic simulator
@@ -227,7 +257,11 @@ pub fn run() {
             get_transmission_oil_status,
             start_transmission_fill_routine,
             set_radiator_fan_duty,
-            set_exhaust_flap
+            set_exhaust_flap,
+            get_engine_datalog,
+            start_datalog_recording,
+            stop_datalog_recording,
+            get_datalog_status
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {

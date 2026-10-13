@@ -2,8 +2,8 @@ use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
     BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, EcuHealth,
-    EcuNode, ParameterType, ParameterValue, TopologyScanReport, TransmissionOilStatus,
-    VehicleProfile, WaterPumpBleedStatus, BMW_F10_ECUS,
+    EcuNode, EngineDatalogFrame, ParameterType, ParameterValue, TopologyScanReport,
+    TransmissionOilStatus, VehicleProfile, WaterPumpBleedStatus, BMW_F10_ECUS,
 };
 use async_trait::async_trait;
 use std::time::Instant;
@@ -579,6 +579,116 @@ impl ObdConnection for MockConnection {
             }
             VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
                 "Exhaust flap actuator is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn read_engine_datalog(&mut self) -> Result<EngineDatalogFrame, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+
+                let elapsed = self.start_time.elapsed().as_secs_f32();
+                let cycle_t = elapsed % 20.0;
+
+                let (
+                    rpm,
+                    speed,
+                    boost_tgt_hpa,
+                    boost_act_hpa,
+                    wgdc,
+                    rail_tgt,
+                    rail_act,
+                    lpfp,
+                    lambda,
+                    iat,
+                    maf,
+                    timing,
+                    knock_retard,
+                    vanos_in_tgt,
+                    vanos_in_act,
+                    vanos_ex_tgt,
+                    vanos_ex_act,
+                ) = if cycle_t < 3.0 {
+                    // Stage 1: Idle
+                    (
+                        720, 0, 1013.0, 1011.0, 0.0, 50.0, 50.2, 5.3, 1.00, 32.0, 4.6, 5.5,
+                        [0.0; 6], 85.0, 85.1, 115.0, 114.9,
+                    )
+                } else if cycle_t < 11.0 {
+                    // Stage 2: 3rd Gear WOT Dyno / Acceleration Pull (3s to 11s)
+                    let p = (cycle_t - 3.0) / 8.0; // 0.0 -> 1.0
+                    let r = 2200.0 + p * 4400.0; // 2200 to 6600 RPM
+                    let s = 45.0 + p * 110.0; // 45 to 155 km/h
+                    let b_tgt = 2150.0; // ~16.5 psi
+                                        // Spool simulation with 0.15s lag curve
+                    let spool = (p * 1.25).min(1.0);
+                    let b_act = 1013.0 + spool * (b_tgt - 1013.0) - (p * 15.0).sin() * 25.0;
+                    let w = if p < 0.25 { 85.0 } else { 62.0 + (p * 5.0) };
+                    let r_tgt = 190.0;
+                    let r_act = 186.0 + (p * 3.5);
+                    let l = 0.94 - (p * 0.10); // 0.94 -> 0.84 Lambda
+                    let i = 33.0 + (p * 11.0); // 33°C -> 44°C IAT
+                    let m = 35.0 + (p * 220.0); // 35 -> 255 g/s MAF
+                    let t = 8.0 + (p * 4.5); // 8.0° -> 12.5° timing advance
+                    let mut kr = [0.0; 6];
+                    if p > 0.4 && p < 0.7 {
+                        kr[1] = -1.2; // Minor Cyl 2 knock correction
+                        kr[4] = -0.6; // Minor Cyl 5 knock correction
+                    }
+                    (
+                        r as u16, s as u8, b_tgt, b_act, w, r_tgt, r_act, 5.1, l, i, m, t, kr,
+                        122.0, 121.7, 98.0, 98.2,
+                    )
+                } else if cycle_t < 15.0 {
+                    // Stage 3: Throttle Lift / Shift
+                    (
+                        3200, 140, 820.0, 810.0, 12.0, 120.0, 122.0, 5.3, 1.28, 38.0, 12.0, 2.0,
+                        [0.0; 6], 90.0, 90.2, 110.0, 109.8,
+                    )
+                } else {
+                    // Stage 4: Steady Cruise
+                    (
+                        1950, 95, 1060.0, 1058.0, 18.0, 85.0, 85.4, 5.2, 1.00, 34.0, 24.0, 18.0,
+                        [0.0; 6], 100.0, 100.1, 105.0, 105.2,
+                    )
+                };
+
+                let boost_tgt_psi = (boost_tgt_hpa - 1013.25) * 0.0145038;
+                let boost_act_psi = (boost_act_hpa - 1013.25) * 0.0145038;
+
+                Ok(EngineDatalogFrame {
+                    timestamp_ms: now_ms,
+                    engine_rpm: rpm,
+                    vehicle_speed_kmh: speed,
+                    boost_target_hpa: boost_tgt_hpa,
+                    boost_actual_hpa: boost_act_hpa,
+                    boost_target_psi: boost_tgt_psi,
+                    boost_actual_psi: boost_act_psi,
+                    wastegate_duty_percent: wgdc,
+                    rail_pressure_target_bar: rail_tgt,
+                    rail_pressure_actual_bar: rail_act,
+                    low_pressure_fuel_bar: lpfp,
+                    lambda,
+                    intake_air_temp_c: iat,
+                    mass_air_flow_gps: maf,
+                    ignition_timing_cyl1: timing,
+                    knock_retard,
+                    misfire_counts: [0, 0, 0, 0, 0, 0],
+                    vanos_intake_target_deg: vanos_in_tgt,
+                    vanos_intake_actual_deg: vanos_in_act,
+                    vanos_exhaust_target_deg: vanos_ex_tgt,
+                    vanos_exhaust_actual_deg: vanos_ex_act,
+                })
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "High-speed engine datalogging is only supported on BMW N55 UDS profiles".into(),
             )),
         }
     }

@@ -1,7 +1,7 @@
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, ParameterType,
-    ParameterValue,
+    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus,
+    EngineDatalogFrame, ParameterType, ParameterValue,
 };
 
 /// UDS Service 0x31 RoutineControl subfunctions
@@ -23,6 +23,7 @@ pub const DID_BMW_BATTERY_HISTORY: u16 = 0x2036;
 pub const DID_BMW_CBS_OVERVIEW: u16 = 0xD020;
 pub const DID_BMW_WATER_PUMP_STATUS: u16 = 0x2042;
 pub const DID_BMW_TRANSMISSION_SUMP_TEMP: u16 = 0x2045;
+pub const DID_BMW_N55_DATALOG: u16 = 0xD100;
 
 /// Builds UDS Service 0x22 ReadDataByIdentifier request frame.
 pub fn build_read_did_request(did: u16) -> Vec<u8> {
@@ -498,6 +499,103 @@ pub fn parse_dtc_response(payload: &[u8]) -> Result<Vec<DtcRecord>, ObdError> {
     Ok(dtcs)
 }
 
+/// Parses BMW N55 high-speed engine datalog frame from DID 0xD100 payload.
+pub fn parse_n55_datalog_response(payload: &[u8]) -> Result<EngineDatalogFrame, ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError("Empty datalog payload".into()));
+    }
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x22),
+            nrc,
+        ));
+    }
+    if payload[0] != 0x62 {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected response SID: {:#04X}, expected 0x62",
+            payload[0]
+        )));
+    }
+    if payload.len() < 3 + 38 {
+        return Err(ObdError::ParseError(format!(
+            "Datalog payload truncated: expected at least 41 bytes, got {}",
+            payload.len()
+        )));
+    }
+
+    let returned_did = u16::from_be_bytes([payload[1], payload[2]]);
+    if returned_did != DID_BMW_N55_DATALOG {
+        return Err(ObdError::Protocol(format!(
+            "DID mismatch: expected {:#04X}, received {:#04X}",
+            DID_BMW_N55_DATALOG, returned_did
+        )));
+    }
+
+    let d = &payload[3..];
+    let rpm = u16::from_be_bytes([d[0], d[1]]);
+    let speed = d[2];
+    let boost_tgt_hpa = u16::from_be_bytes([d[3], d[4]]) as f32;
+    let boost_act_hpa = u16::from_be_bytes([d[5], d[6]]) as f32;
+    let boost_tgt_psi = (boost_tgt_hpa - 1013.25) * 0.0145038;
+    let boost_act_psi = (boost_act_hpa - 1013.25) * 0.0145038;
+    let wgdc = d[7] as f32;
+    let rail_tgt = (u16::from_be_bytes([d[8], d[9]]) as f32) / 10.0;
+    let rail_act = (u16::from_be_bytes([d[10], d[11]]) as f32) / 10.0;
+    let lpfp = (d[12] as f32) / 10.0;
+    let lambda = (d[13] as f32) / 100.0;
+    let iat = (d[14] as f32) - 40.0;
+    let maf = (u16::from_be_bytes([d[15], d[16]]) as f32) / 10.0;
+    let timing = (d[17] as f32 - 80.0) * 0.5;
+
+    let knock_retard = [
+        (d[18] as f32) * -0.1,
+        (d[19] as f32) * -0.1,
+        (d[20] as f32) * -0.1,
+        (d[21] as f32) * -0.1,
+        (d[22] as f32) * -0.1,
+        (d[23] as f32) * -0.1,
+    ];
+
+    let misfire_counts = [
+        d[24] as u16,
+        d[25] as u16,
+        d[26] as u16,
+        d[27] as u16,
+        d[28] as u16,
+        d[29] as u16,
+    ];
+
+    let vanos_in_tgt = (u16::from_be_bytes([d[30], d[31]]) as f32) / 10.0;
+    let vanos_in_act = (u16::from_be_bytes([d[32], d[33]]) as f32) / 10.0;
+    let vanos_ex_tgt = (u16::from_be_bytes([d[34], d[35]]) as f32) / 10.0;
+    let vanos_ex_act = (u16::from_be_bytes([d[36], d[37]]) as f32) / 10.0;
+
+    Ok(EngineDatalogFrame {
+        timestamp_ms: 0,
+        engine_rpm: rpm,
+        vehicle_speed_kmh: speed,
+        boost_target_hpa: boost_tgt_hpa,
+        boost_actual_hpa: boost_act_hpa,
+        boost_target_psi: boost_tgt_psi,
+        boost_actual_psi: boost_act_psi,
+        wastegate_duty_percent: wgdc,
+        rail_pressure_target_bar: rail_tgt,
+        rail_pressure_actual_bar: rail_act,
+        low_pressure_fuel_bar: lpfp,
+        lambda,
+        intake_air_temp_c: iat,
+        mass_air_flow_gps: maf,
+        ignition_timing_cyl1: timing,
+        knock_retard,
+        misfire_counts,
+        vanos_intake_target_deg: vanos_in_tgt,
+        vanos_intake_actual_deg: vanos_in_act,
+        vanos_exhaust_target_deg: vanos_ex_tgt,
+        vanos_exhaust_actual_deg: vanos_ex_act,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -651,5 +749,69 @@ mod tests {
         assert_eq!(rear_brakes.remaining_km, Some(3100));
         assert_eq!(rear_brakes.due_date, None);
         assert_eq!(rear_brakes.reset_count, 1);
+    }
+
+    #[test]
+    fn test_parse_n55_datalog_frame() {
+        // Construct 41-byte response:
+        // 0x62, 0xD1, 0x00
+        // RPM: 3500 (0x0D, 0xAC)
+        // Speed: 85 km/h (0x55)
+        // Boost target: 1850 hPa (0x07, 0x3A)
+        // Boost actual: 1820 hPa (0x07, 0x1C)
+        // WGDC: 68% (0x44)
+        // Rail tgt: 180.0 bar -> 1800 (0x07, 0x08)
+        // Rail act: 178.5 bar -> 1785 (0x06, 0xF9)
+        // LPFP: 5.2 bar -> 52 (0x34)
+        // Lambda: 0.88 -> 88 (0x58)
+        // IAT: 35°C -> 75 (0x4B)
+        // MAF: 165.0 g/s -> 1650 (0x06, 0x72)
+        // Timing: 10.0 deg -> raw = 10.0/0.5 + 80 = 100 (0x64)
+        // Knock retard: [0, -1.5, 0, 0, -0.8, 0] -> [0, 15, 0, 0, 8, 0]
+        // Misfires: [0, 0, 0, 0, 0, 0]
+        // VANOS IN tgt: 110.0 deg -> 1100 (0x04, 0x4C)
+        // VANOS IN act: 109.5 deg -> 1095 (0x04, 0x47)
+        // VANOS EX tgt: 105.0 deg -> 1050 (0x04, 0x1A)
+        // VANOS EX act: 104.8 deg -> 1048 (0x04, 0x18)
+        let mut payload = vec![0x62, 0xD1, 0x00];
+        payload.extend_from_slice(&3500u16.to_be_bytes()); // RPM
+        payload.push(85); // Speed
+        payload.extend_from_slice(&1850u16.to_be_bytes()); // Boost tgt
+        payload.extend_from_slice(&1820u16.to_be_bytes()); // Boost act
+        payload.push(68); // WGDC
+        payload.extend_from_slice(&1800u16.to_be_bytes()); // Rail tgt
+        payload.extend_from_slice(&1785u16.to_be_bytes()); // Rail act
+        payload.push(52); // LPFP
+        payload.push(88); // Lambda
+        payload.push(75); // IAT (75 - 40 = 35)
+        payload.extend_from_slice(&1650u16.to_be_bytes()); // MAF
+        payload.push(100); // Timing
+        payload.extend_from_slice(&[0, 15, 0, 0, 8, 0]); // Knock retard
+        payload.extend_from_slice(&[0, 0, 0, 0, 0, 0]); // Misfires
+        payload.extend_from_slice(&1100u16.to_be_bytes()); // VANOS in tgt
+        payload.extend_from_slice(&1095u16.to_be_bytes()); // VANOS in act
+        payload.extend_from_slice(&1050u16.to_be_bytes()); // VANOS ex tgt
+        payload.extend_from_slice(&1048u16.to_be_bytes()); // VANOS ex act
+
+        assert_eq!(payload.len(), 41);
+        let frame = parse_n55_datalog_response(&payload).unwrap();
+
+        assert_eq!(frame.engine_rpm, 3500);
+        assert_eq!(frame.vehicle_speed_kmh, 85);
+        assert_eq!(frame.boost_target_hpa, 1850.0);
+        assert_eq!(frame.boost_actual_hpa, 1820.0);
+        assert!((frame.boost_target_psi - 12.13).abs() < 0.1);
+        assert_eq!(frame.wastegate_duty_percent, 68.0);
+        assert_eq!(frame.rail_pressure_target_bar, 180.0);
+        assert_eq!(frame.rail_pressure_actual_bar, 178.5);
+        assert_eq!(frame.low_pressure_fuel_bar, 5.2);
+        assert!((frame.lambda - 0.88).abs() < 0.01);
+        assert_eq!(frame.intake_air_temp_c, 35.0);
+        assert_eq!(frame.mass_air_flow_gps, 165.0);
+        assert_eq!(frame.ignition_timing_cyl1, 10.0);
+        assert_eq!(frame.knock_retard[1], -1.5);
+        assert_eq!(frame.knock_retard[4], -0.8);
+        assert_eq!(frame.vanos_intake_target_deg, 110.0);
+        assert_eq!(frame.vanos_intake_actual_deg, 109.5);
     }
 }

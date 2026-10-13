@@ -8,3 +8,5 @@ dist
 .DS_Store
 Thumbs.db
 src-tauri/target
+*.csv
+

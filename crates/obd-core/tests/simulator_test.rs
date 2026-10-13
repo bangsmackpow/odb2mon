@@ -317,3 +317,59 @@ async fn test_gmc_actuators_unsupported() {
     let flap_err = conn.set_exhaust_flap(true).await.unwrap_err();
     assert!(matches!(flap_err, obd_core::ObdError::Unsupported(_)));
 }
+
+#[tokio::test]
+async fn test_bmw_n55_datalog_and_recording() {
+    let conn = Box::new(MockConnection::new(VehicleProfile::BmwF10_535i));
+    let (manager, _event_rx) = VehicleManager::new(conn);
+
+    // Initial status check
+    let status = manager.get_datalog_status().await.unwrap();
+    assert!(status.supported);
+    assert!(!status.is_recording);
+    assert_eq!(status.sample_count, 0);
+
+    // Start recording session
+    let start_msg = manager.start_datalog_recording().await.unwrap();
+    assert!(start_msg.contains("recording initiated"));
+
+    let status_active = manager.get_datalog_status().await.unwrap();
+    assert!(status_active.is_recording);
+
+    // Read 5 datalog frames
+    for _ in 0..5 {
+        let frame = manager.read_engine_datalog().await.unwrap();
+        assert!(frame.engine_rpm > 500);
+        assert!(frame.boost_target_hpa >= 1000.0);
+        assert!(frame.rail_pressure_target_bar >= 40.0);
+        assert!(frame.low_pressure_fuel_bar > 4.0);
+        assert!(frame.vanos_intake_target_deg > 50.0);
+        assert_eq!(frame.misfire_counts.len(), 6);
+        assert_eq!(frame.knock_retard.len(), 6);
+    }
+
+    // Stop recording and inspect CSV summary
+    let summary = manager.stop_datalog_recording().await.unwrap();
+    assert_eq!(summary.sample_count, 5);
+    assert!(summary
+        .csv_content
+        .contains("timestamp_ms,rpm,speed_kmh,boost_target_hpa"));
+    assert!(summary.csv_content.lines().count() >= 6); // header + 5 lines
+
+    // Status should be idle now
+    let status_idle = manager.get_datalog_status().await.unwrap();
+    assert!(!status_idle.is_recording);
+    assert_eq!(status_idle.sample_count, 5);
+}
+
+#[tokio::test]
+async fn test_gmc_datalog_unsupported() {
+    let conn = Box::new(MockConnection::new(VehicleProfile::GmcAcadia_2010));
+    let (manager, _event_rx) = VehicleManager::new(conn);
+
+    let status = manager.get_datalog_status().await.unwrap();
+    assert!(!status.supported);
+
+    let datalog_err = manager.read_engine_datalog().await.unwrap_err();
+    assert!(matches!(datalog_err, obd_core::ObdError::Unsupported(_)));
+}

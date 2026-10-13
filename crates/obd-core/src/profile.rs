@@ -423,3 +423,86 @@ pub struct ExhaustFlapStatus {
     pub is_open: bool,
     pub is_overridden: bool,
 }
+
+/// Individual high-speed engine datalog frame capturing dynamic combustion and turbocharger parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EngineDatalogFrame {
+    pub timestamp_ms: u64,
+    pub engine_rpm: u16,
+    pub vehicle_speed_kmh: u8,
+    pub boost_target_hpa: f32,
+    pub boost_actual_hpa: f32,
+    pub boost_target_psi: f32,
+    pub boost_actual_psi: f32,
+    pub wastegate_duty_percent: f32,
+    pub rail_pressure_target_bar: f32,
+    pub rail_pressure_actual_bar: f32,
+    pub low_pressure_fuel_bar: f32,
+    pub lambda: f32,
+    pub intake_air_temp_c: f32,
+    pub mass_air_flow_gps: f32,
+    pub ignition_timing_cyl1: f32,
+    pub knock_retard: [f32; 6],
+    pub misfire_counts: [u16; 6],
+    pub vanos_intake_target_deg: f32,
+    pub vanos_intake_actual_deg: f32,
+    pub vanos_exhaust_target_deg: f32,
+    pub vanos_exhaust_actual_deg: f32,
+}
+
+impl Default for EngineDatalogFrame {
+    fn default() -> Self {
+        Self {
+            timestamp_ms: 0,
+            engine_rpm: 650,
+            vehicle_speed_kmh: 0,
+            boost_target_hpa: 1013.0,
+            boost_actual_hpa: 1013.0,
+            boost_target_psi: 0.0,
+            boost_actual_psi: 0.0,
+            wastegate_duty_percent: 0.0,
+            rail_pressure_target_bar: 50.0,
+            rail_pressure_actual_bar: 50.0,
+            low_pressure_fuel_bar: 5.2,
+            lambda: 1.0,
+            intake_air_temp_c: 25.0,
+            mass_air_flow_gps: 4.5,
+            ignition_timing_cyl1: 5.0,
+            knock_retard: [0.0; 6],
+            misfire_counts: [0; 6],
+            vanos_intake_target_deg: 85.0,
+            vanos_intake_actual_deg: 85.0,
+            vanos_exhaust_target_deg: 115.0,
+            vanos_exhaust_actual_deg: 115.0,
+        }
+    }
+}
+
+/// Datalogger recording status and session metadata.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DataloggerStatus {
+    pub supported: bool,
+    pub is_recording: bool,
+    pub sample_count: usize,
+    pub elapsed_seconds: f32,
+}
+
+impl Default for DataloggerStatus {
+    fn default() -> Self {
+        Self {
+            supported: false,
+            is_recording: false,
+            sample_count: 0,
+            elapsed_seconds: 0.0,
+        }
+    }
+}
+
+/// Result returned when a recording session is completed and exported.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DatalogRecordingSummary {
+    pub sample_count: usize,
+    pub duration_seconds: f32,
+    pub csv_content: String,
+    pub saved_file_path: Option<String>,
+}
