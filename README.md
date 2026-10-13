@@ -1,25 +1,77 @@
 # obd2mon
 
-Cross-platform automotive diagnostics engine and dashboard targeting modern BMW UDS (over DoIP Ethernet) and legacy GM OBD2 (over ELM327 Bluetooth/Serial). Engineered in pure Rust with asynchronous I/O and zero UI coupling.
+High-performance, cross-platform automotive diagnostic suite and real-time telemetry engine engineered in pure Rust with asynchronous non-blocking I/O. 
+
+Specifically architected for modern BMW UDS diagnostics over DoIP Ethernet (ENET) and universal SAE J1979 / GM Mode 22 diagnostics over ELM327 Bluetooth/Serial.
 
 ---
 
 ## Overview
 
-`obd2mon` bridges vehicle communication buses into a unified telemetry stream for desktop and mobile targets. The system provides real-time dashboard instrumentation (RPM, road speed, coolant temperature, engine oil temperature) and Diagnostic Trouble Code (DTC) management across heterogeneous vehicle protocols:
+`obd2mon` bridges vehicle communication buses into a unified telemetry stream for desktop and embedded targets. It delivers real-time dashboard instrumentation, dealer-level service functions (ISTA+ equivalent routines), fault memory management, multi-channel datalogging, and garage profile intelligence across heterogeneous vehicle platforms:
 
-- **2011 BMW 535i xDrive (F10 chassis, N55 engine):** Communicates via an ENET (RJ45-to-OBD2) cable over TCP/IP using Diagnostics over IP (DoIP, ISO 13400) and Unified Diagnostic Services (UDS, ISO 14229).
-- **2010 GMC Acadia (3.6L LLT V6):** Communicates via ELM327-compatible Bluetooth adapters over serial streams using standard SAE J1979 / ISO 15765-4 (CAN 11-bit 500k) and GM manufacturer-specific Mode 22 PIDs.
-- **Hardware-Free Simulator:** Physics-based virtual vehicle simulator for automated testing and CI/CD without physical vehicle access.
+- **BMW F-Series / G-Series (e.g. 2011 BMW 535i xDrive F10 / N55):** Communicates via an ENET (RJ45-to-OBD2) cable over TCP/IP using Diagnostics over IP (DoIP, ISO 13400) and Unified Diagnostic Services (UDS, ISO 14229).
+- **GM / GMC Platforms (e.g. 2010 GMC Acadia 3.6L LLT):** Communicates via ELM327-compatible Bluetooth adapters over serial streams using standard SAE J1979 / ISO 15765-4 (CAN 11-bit 500k) and GM manufacturer-specific Mode 22 PIDs.
+- **Universal / Generic OBD-II:** Standard emissions diagnostics (Modes 01, 03, 04, 09) supported on any 1996+ gasoline or 2008+ CAN-bus equipped passenger vehicle.
+- **Hardware-Free Simulation Engine:** Physics-based virtual vehicle simulator for automated testing and CI/CD without physical vehicle access.
 
 ---
 
-## Architectural Principles
+## Key Features
 
-1. **Strict Protocol Abstraction:** The core library (`obd-core`) defines the `ObdConnection` trait. The presentation layer and business logic remain completely agnostic to transport mechanics (TCP vs. Serial) and diagnostic dialects (UDS vs. standard OBD2).
-2. **Asynchronous Non-Blocking I/O:** Built on `tokio`. Network and bus transactions run in background worker loops decoupled from UI rendering threads via `tokio::sync::watch` and `tokio::sync::mpsc` channels.
-3. **Graceful PID Degradation:** On platforms where specific parameters are unsupported (e.g., Mode 22 Oil Temperature on 2010 GM platforms), the engine traps Negative Response Codes (NRCs) and `NO DATA` responses, returning `ParameterValue::Unsupported` without thread stalls or panics.
-4. **Session Elevation Automation:** For BMW UDS DIDs requiring diagnostic privileges (NRC `0x22` - Conditions Not Correct), the adapter automatically negotiates Extended Diagnostic Session (`0x10 0x03`) and retries the transaction.
+### 1. Real-Time Telemetry Dashboard
+- High-frequency engine speed (RPM) circular dial with animated redline indicators.
+- Scalable digital speedometer with dynamic **KM/H & MPH** unit toggling.
+- Engine coolant temperature bar gauge with safe operating zone tracking (75°C - 105°C).
+- Engine oil temperature telemetry with automatic graceful fallback when unsupported.
+
+### 2. Diagnostic Trouble Code (DTC) Scanner
+- Read and decode stored, pending, and confirmed fault codes across all vehicle systems.
+- Offline fault code database with detailed cause and failure descriptions.
+- Safety-interlocked fault code clearing across all vehicle control units.
+
+### 3. All-Module ECU Network Topology Map
+- Interrogates 16 electronic control units across 4 discrete chassis communication buses:
+  - **PT-CAN (500 kbps):** DME (`0x0012`), EGS (`0x0018`), DSC (`0x0029`), EKPS (`0x0017`), GWS (`0x005E`).
+  - **FlexRay (10 Mbps):** EPS (`0x0030`), ICM (`0x001C`), EMF (`0x0026`).
+  - **K-CAN (100 kbps):** CAS (`0x0040`), KOMBI (`0x0060`), IHKA (`0x0078`), FRM (`0x0072`), JBE (`0x0070`), PDC (`0x0067`).
+  - **Ethernet (100 Mbps):** ZGW (`0x0010`), HU_NBT (`0x0063`).
+- Visual status color coding (🟢 Healthy, 🟡 Stored Faults, 🔴 Comm Error, ⚪ No Response).
+- Interactive ECU Inspector displaying address, bus segment, response latency, and active DTCs.
+
+### 4. Power Management & Battery Registration
+- Intelligent Battery Sensor (IBS) live telemetry via DID `0xD010` (SoC %, Terminal Voltage mV, Net Current mA, Core Temp °C).
+- Historical battery replacement log via DID `0x2036` (odometer milestones).
+- UDS Routine `0x0219` Battery Registration to stamp the odometer and reset alternator charging curves.
+
+### 5. Condition Based Service (CBS) Monitor & Reset
+- Real-time remaining life %, mileage distance, and expiration date via DID `0xD020` for:
+  - Engine Oil (`0x01`), Front Brakes (`0x02`), Rear Brakes (`0x03`), Brake Fluid (`0x04`), Vehicle Check (`0x05`).
+- One-click service interval reset via UDS Routine `0x0220`.
+
+### 6. Actuator Service Routines
+- **Coolant System Electric Water Pump Bleeding (Routine `0x0211`):** Automated 12-minute 4-stage purge cycle with safety prerequisites checklist.
+- **ZF 8HP Transmission Fluid Temperature & Fill Level (DID `0x2045` & Routine `0x0225`):** Visual 40°C–50°C fill window with torque converter fill RPM hold.
+- **Radiator Cooling Fan Step Test (Routine `0x0215`):** PWM duty cycle steps (15%, 50%, 90%, Stop).
+- **Muffler Tailpipe Exhaust Flap Actuator (Routine `0x0218`):** Direct toggle between open and closed positions.
+
+### 7. N55 High-Speed Datalogging & Oscilloscope
+- Live acquisition (20–50 Hz) of 31 engine channels via DID `0xD100` (Boost Target, Boost Actual, WGDC %, HPFP Rail Pressure, LPFP, Lambda, MAF, IAT, Timing, Knock Cyl 1-6, Misfires, VANOS).
+- Real-time multi-trace HTML5 canvas oscilloscope strip chart with customizable channel toggles.
+- RFC 4180 compliant CSV recording saved directly to disk and downloadable in-browser for analysis in Virtual Dyno or MegaLogViewer.
+
+### 8. Garage & Saved Vehicles Profile Management
+- Multi-vehicle garage manager with persistent profile storage in `%APPDATA%\obd2mon\garage.json`.
+- **Dynamic Hardware Compatibility Intelligence Engine:** Evaluates Make, Model, Year, and Interface to recommend optimal cables (ENET, K+DCAN, ELM327), outline supported capabilities, warn about limitations, and show wiring pinouts.
+- **VIN Interrogation & Auto-Detection:** Automatically queries vehicle VIN over UDS DID `0xF190` or SAE Mode 09 PID `0x02` and matches against saved garage vehicles.
+- **Persistent Per-Vehicle Logbooks (`vehicles/<id>/history.json`):** Automatically logs all battery registrations, CBS resets, bleed cycles, transmission fills, DTC scans, datalog sessions, and manual maintenance notes.
+
+### 9. In-App Technical Documentation & Auto-Updater
+- 10-chapter technical reference built directly into the UI.
+- Integrated GitHub release updater checking `bangsmackpow/obd2mon` releases.
+
+### 10. Windows WiX Installer
+- Generates an `obd2mon-installer.msi` package that installs `obd2mon-app.exe` (GUI) and `obd-cli.exe` (CLI), adds an `obd2mon` Desktop Shortcut, and registers the installation directory on the system PATH.
 
 ---
 
@@ -28,106 +80,119 @@ Cross-platform automotive diagnostics engine and dashboard targeting modern BMW 
 ```text
 obd2mon/
 ├── Cargo.toml                       # Workspace manifest
+├── AGENTS.md                        # Operational instructions for AI agents & developers
+├── README.md                        # Project documentation
+├── docs/
+│   └── FEATURES.md                  # Comprehensive feature & technical guide
+├── wix/
+│   └── main.wxs                     # WiX Toolset Windows installer definition
 ├── .github/
 │   └── workflows/
-│       └── build.yml                # Windows & Android CI/CD pipeline
+│       └── build.yml                # Windows & Android CI/CD release pipeline
 ├── crates/
-│   ├── obd-core/                    # Platform-agnostic core library
+│   ├── obd-core/                    # Platform-agnostic diagnostic engine
 │   │   ├── src/
 │   │   │   ├── lib.rs               # Library root & public exports
 │   │   │   ├── error.rs             # ObdError enum & ISO 14229 NRC translations
 │   │   │   ├── connection.rs        # ObdConnection trait & state machine
-│   │   │   ├── profile.rs           # VehicleProfile & telemetry value models
-│   │   │   ├── manager.rs           # Decoupled polling loop & broadcast channels
+│   │   │   ├── profile.rs           # VehicleProfile & telemetry models
+│   │   │   ├── manager.rs           # VehicleManager background loop & telemetry channels
+│   │   │   ├── garage.rs            # Garage, vehicle profiles, compatibility & logbooks
+│   │   │   ├── dtc_db.rs            # Offline DTC database & translations
+│   │   │   ├── updater.rs           # GitHub release auto-updater checker
 │   │   │   ├── protocols/
 │   │   │   │   ├── doip.rs          # ISO 13400 framing & Routing Activation
-│   │   │   │   ├── uds.rs           # ISO 14229 Services 0x10, 0x19, 0x22, 0x04
-│   │   │   │   └── elm327.rs        # SAE J1979 Modes 01, 22, 03, 04 parsers
+│   │   │   │   ├── uds.rs           # ISO 14229 Services (0x10, 0x19, 0x22, 0x31, 0x04)
+│   │   │   │   └── elm327.rs        # SAE J1979 Modes 01, 03, 04, 09, 22 parsers
 │   │   │   └── adapters/
-│   │   │       ├── enet.rs          # BMW ENET TCP client
-│   │   │       ├── bluetooth.rs     # GMC ELM327 Bluetooth adapter
-│   │   │       └── mock.rs          # Physics-based simulation engine
+│   │   │       ├── enet.rs          # BMW ENET TCP client (169.254.1.1:6801)
+│   │   │       ├── bluetooth.rs     # GMC ELM327 Bluetooth/Serial adapter
+│   │   │       └── mock.rs          # Virtual physics & vehicle simulator
 │   │   └── tests/
 │   │       └── simulator_test.rs    # Core integration test suite
+│   ├── app-gui/                     # Desktop GUI frontend (Tauri v2)
+│   │   ├── src-tauri/
+│   │   │   ├── Cargo.toml           # Binary package: obd2mon-app
+│   │   │   ├── tauri.conf.json      # Tauri app configuration & permissions
+│   │   │   └── src/
+│   │   │       ├── lib.rs           # Tauri IPC commands & manager lifecycle
+│   │   │       └── main.rs          # Application entrypoint
+│   │   └── ui/
+│   │       ├── index.html           # Single-page diagnostic application UI
+│   │       ├── app.css              # Cyber-automotive styling & responsive layout
+│   │       └── app.js               # Frontend controller, SVG gauges & chart canvas
 │   └── obd-cli/                     # Headless command-line diagnostic tool
 │       └── src/
 │           └── main.rs              # Real-time console telemetry runner
-└── README.md
 ```
-
----
-
-## Vehicle Profiles & Parameter Matrix
-
-| Parameter | BMW 535i (F10 / N55) | 2010 GMC Acadia (LLT) | Fallback Behavior |
-| :--- | :--- | :--- | :--- |
-| **Engine RPM** | UDS DID `0xD001` via DME `0x0012` | Mode `01` PID `0C` | Returns `NotAvailable` if bus idle |
-| **Vehicle Speed** | UDS DID `0xD002` | Mode `01` PID `0D` | Returns `0 km/h` |
-| **Coolant Temp** | UDS DID `0xD003` (`raw - 48°C`) | Mode `01` PID `05` (`A - 40°C`) | Plateau warning at >105°C |
-| **Oil Temp** | UDS DID `0xD004` (`raw - 48°C`) | Mode `22` PID `1154` | Traps `NO DATA` / `7F 22` -> `Unsupported` |
-| **Read DTCs** | UDS Service `0x19 0x02 0xFF` | Mode `03` Request | Parses standard SAE / BMW hex codes |
-| **Clear DTCs** | UDS Service `0x04 FF FF FF` | Mode `04` Clear | Requires explicit user safety confirmation |
 
 ---
 
 ## Quickstart
 
 ### Prerequisites
+- **Rust 1.80+** (`cargo`, `rustc`)
+- **Windows 10/11** or **Linux**
+- **WebView2 Runtime** (pre-installed on Windows 10/11)
 
-- Rust 1.80+ (`cargo`, `rustc`)
-- Windows 10/11 or Linux for desktop development
-- Android NDK (r26b+) for mobile cross-compilation
+### Running the Desktop Application (GUI)
 
-### Running the Test Suite
-
-Run unit and integration tests across the workspace:
+Launch the full graphical dashboard:
 
 ```bash
-cargo test --workspace
+cargo run --bin obd2mon-app
 ```
 
-### Running the Terminal Telemetry Runner
+Select your vehicle connection profile from the top toolbar:
+- **BMW F10 (Simulated):** Simulates live N55 engine telemetry, fault codes, CBS monitors, battery sensors, and actuator routines.
+- **GMC Acadia (Simulated):** Simulates GM OBD-II telemetry with graceful oil temperature fallback.
+- **Physical BMW ENET:** Connect via RJ45 ENET cable to `169.254.1.1:6801`.
+- **Physical ELM327:** Connect via paired Bluetooth/Serial COM port at 38400 baud.
 
-#### 1. Simulation Mode (Default)
-Simulates active engine acceleration, thermodynamic coolant/oil warmup, and realistic fault codes:
+### Running the Terminal Telemetry Runner (CLI)
 
 ```bash
+# 1. Physics Simulation Mode (Default)
 cargo run --bin obd-cli -- mock
-```
 
-#### 2. Simulated BMW F10 Profile
-```bash
+# 2. Simulated BMW F10 Profile (DoIP / UDS)
 cargo run --bin obd-cli -- bmw
-```
 
-#### 3. Simulated GMC Acadia Profile (Demonstrating Graceful Oil Temp Fallback)
-```bash
+# 3. Simulated GMC Acadia Profile (ELM327 / Mode 22)
 cargo run --bin obd-cli -- gmc
-```
 
-#### 4. Live BMW ENET Hardware
-Connect your laptop to the vehicle OBD2 port using an ENET RJ45 cable (standard vehicle IP: `169.254.1.1`, port `6801`):
-
-```bash
+# 4. Live Vehicle Connection over ENET Cable
 cargo run --bin obd-cli -- enet 169.254.1.1 6801
 ```
 
 ---
 
-## Cross-Platform UI Architecture
+## Developer & Verification Toolchain
 
-The presentation layer is decoupled from the Rust core using **Tauri v2**:
+Ensure all checks pass before submitting pull requests:
 
-- **Core (`obd-core`):** Runs the background `VehicleManager` loop, polling vehicle buses at 10–20 Hz.
-- **IPC Bridge:** Telemetry snapshots (`DashboardSnapshot`) are broadcast to the frontend via `app_handle.emit("telemetry", snapshot)`.
-- **Frontend:** Built with Svelte 5 and SVG for high-contrast geometric dials, digital readouts, and responsive scaling on both Windows laptops and Android dashboard mounts.
+```bash
+# Verify formatting
+cargo fmt --all -- --check
+
+# Run all 47+ unit and integration tests
+cargo test --workspace
+
+# Run strict clippy linting
+cargo clippy --all-targets -- -D warnings
+
+# Build optimized release binaries
+cargo build --release --bin obd-cli --bin obd2mon-app
+```
+
+For AI agents and automated development instructions, refer to [AGENTS.md](AGENTS.md).  
+For the complete technical feature specification, refer to [docs/FEATURES.md](docs/FEATURES.md).
 
 ---
 
 ## License
 
 Licensed under either of:
-
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
