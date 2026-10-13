@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 authors = ["odb2mon Contributors"]
 license = "MIT OR Apache-2.0"

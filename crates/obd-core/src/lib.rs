@@ -14,6 +14,7 @@ pub use dtc_db::{lookup_description, lookup_known_dtc};
 pub use error::ObdError;
 pub use manager::VehicleManager;
 pub use profile::{
-    DashboardSnapshot, DtcRecord, DtcStatus, ParameterType, ParameterValue, VehicleProfile,
+    BatteryStatus, DashboardSnapshot, DtcRecord, DtcStatus, ParameterType, ParameterValue,
+    VehicleProfile,
 };
 pub use updater::{check_for_updates, parse_clean_semver, UpdateInfo};

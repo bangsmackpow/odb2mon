@@ -1,5 +1,5 @@
 use crate::error::ObdError;
-use crate::profile::{DtcRecord, ParameterType, ParameterValue, VehicleProfile};
+use crate::profile::{BatteryStatus, DtcRecord, ParameterType, ParameterValue, VehicleProfile};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +36,20 @@ pub trait ObdConnection: Send + Sync {
 
     /// Clears Diagnostic Trouble Codes.
     async fn clear_dtcs(&mut self) -> Result<(), ObdError>;
+
+    /// Queries Intelligent Battery Sensor (IBS) and Power Management telemetry.
+    async fn read_battery_status(&mut self) -> Result<BatteryStatus, ObdError> {
+        Err(ObdError::Unsupported(
+            "Battery status query is not supported on this vehicle profile".into(),
+        ))
+    }
+
+    /// Registers a new battery exchange in DME/DDE memory.
+    async fn register_battery_replacement(&mut self) -> Result<String, ObdError> {
+        Err(ObdError::Unsupported(
+            "Battery registration is only supported on BMW UDS profiles".into(),
+        ))
+    }
 
     /// Returns the vehicle profile associated with this connection.
     fn profile(&self) -> VehicleProfile;

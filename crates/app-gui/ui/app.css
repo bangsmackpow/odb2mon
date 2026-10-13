@@ -657,3 +657,241 @@ body {
   justify-content: center;
   gap: 16px;
 }
+
+/* BMW Service & Battery Registration */
+.service-unsupported-banner {
+  background-color: rgba(255, 152, 0, 0.12);
+  border: 1px solid var(--accent-amber);
+  color: var(--accent-amber);
+  padding: 14px 18px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.service-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.service-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.service-card-header {
+  margin-bottom: 16px;
+}
+
+.service-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--accent-cyan);
+  background-color: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.service-tag.warning {
+  color: var(--accent-amber);
+  background-color: rgba(255, 152, 0, 0.1);
+  border-color: rgba(255, 152, 0, 0.25);
+}
+
+.service-card h3 {
+  font-size: 1.05rem;
+  letter-spacing: 0.5px;
+}
+
+.service-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Battery SoC display */
+.battery-soc-container {
+  background-color: #0d0f14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+}
+
+.battery-soc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.soc-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.soc-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent-green);
+}
+
+.soc-bar-bg {
+  width: 100%;
+  height: 8px;
+  background-color: #1a1e2b;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.soc-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff9800, #00e676);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Battery Metrics Grid */
+.battery-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.battery-metric-item {
+  background-color: #0d0f14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.metric-sub {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+}
+
+/* Battery Replacement History */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #0d0f14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.history-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background-color: rgba(0, 229, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.history-km {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.history-miles {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.history-summary {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-dim);
+}
+
+/* Service Checklist & Actions */
+.service-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #0d0f14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.check-item {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-icon {
+  color: var(--accent-green);
+  font-weight: 800;
+}
+
+.service-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.service-action-status {
+  font-size: 0.85rem;
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
+.btn-warning {
+  background-color: #b26a00;
+  border-color: #ff9800;
+  color: #fff;
+}
+
+.btn-warning:hover {
+  background-color: #e65100;
+}
+

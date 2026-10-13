@@ -135,4 +135,18 @@ impl VehicleManager {
         let mut conn = self.connection.lock().await;
         conn.clear_dtcs().await
     }
+
+    /// Queries Intelligent Battery Sensor (IBS) telemetry from vehicle controller.
+    pub async fn read_battery_status(
+        &self,
+    ) -> Result<crate::profile::BatteryStatus, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.read_battery_status().await
+    }
+
+    /// Registers a newly installed battery in engine controller memory.
+    pub async fn register_battery_replacement(&self) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.register_battery_replacement().await
+    }
 }

@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.2.2</span>
+        <span class="version-badge" id="appVersion">v0.3.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -21,6 +21,9 @@
         </button>
         <button class="nav-btn" data-page="dtcs">
           <span class="icon">🛠</span> FAULT CODES <span class="badge" id="dtcBadge">0</span>
+        </button>
+        <button class="nav-btn" data-page="service">
+          <span class="icon">⚡</span> BMW SERVICE
         </button>
         <button class="nav-btn" data-page="profiles">
           <span class="icon">⚙</span> PROFILES
@@ -143,7 +146,115 @@
         </div>
       </section>
 
-      <!-- 3. VEHICLE PROFILES VIEW -->
+      <!-- BMW SERVICE VIEW -->
+      <section id="page-service" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>BMW SERVICE FUNCTIONS · ISTA+ EQUIVALENT</h2>
+            <p>Intelligent Battery Sensor (IBS) live telemetry, power management, and battery registration routine</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="btnRefreshBattery">🔄 REFRESH BATTERY DATA</button>
+          </div>
+        </div>
+
+        <div class="service-unsupported-banner" id="batteryUnsupportedBanner" style="display: none;">
+          ⚠️ Battery registration and IBS telemetry are only supported on BMW UDS / DoIP profiles (e.g. BMW F10). Please switch to the BMW profile in the Profiles tab.
+        </div>
+
+        <div class="service-grid" id="batteryServiceGrid">
+          <!-- Card 1: Live IBS Telemetry -->
+          <div class="service-card">
+            <div class="service-card-header">
+              <span class="service-tag">IBS TELEMETRY (DID 0xD010)</span>
+              <h3>Intelligent Battery Sensor</h3>
+            </div>
+            <div class="battery-soc-container">
+              <div class="battery-soc-header">
+                <span class="soc-label">STATE OF CHARGE (SoC)</span>
+                <span class="soc-value" id="valBatSoc">-- %</span>
+              </div>
+              <div class="soc-bar-bg">
+                <div class="soc-bar-fill" id="batSocBar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="battery-metrics-grid">
+              <div class="battery-metric-item">
+                <span class="metric-label">TERMINAL VOLTAGE</span>
+                <span class="metric-value" id="valBatVoltage">-- V</span>
+                <span class="metric-sub" id="subBatVoltage">Resting: 12.6V · Charging: 14.2V</span>
+              </div>
+              <div class="battery-metric-item">
+                <span class="metric-label">NET CURRENT</span>
+                <span class="metric-value" id="valBatCurrent">-- A</span>
+                <span class="metric-sub" id="subBatCurrent">Discharge (-) / Charge (+)</span>
+              </div>
+              <div class="battery-metric-item">
+                <span class="metric-label">CORE TEMPERATURE</span>
+                <span class="metric-value" id="valBatTemp">-- °C</span>
+                <span class="metric-sub">Operating: 10 - 45°C</span>
+              </div>
+              <div class="battery-metric-item">
+                <span class="metric-label">CAPACITY & TYPE</span>
+                <span class="metric-value" id="valBatType">--</span>
+                <span class="metric-sub">Stored in DME coding</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Battery Replacement History -->
+          <div class="service-card">
+            <div class="service-card-header">
+              <span class="service-tag">DME MEMORY (DID 0x2036)</span>
+              <h3>Battery Replacement History</h3>
+            </div>
+            <p class="service-desc">Historical vehicle odometer records logged at previous battery registrations:</p>
+            <div class="history-list" id="batteryHistoryList">
+              <div class="history-item">
+                <span class="history-badge">REG 1 (LATEST)</span>
+                <span class="history-km" id="valHist1">-- km</span>
+                <span class="history-miles" id="valHistMiles1">-- mi</span>
+              </div>
+              <div class="history-item">
+                <span class="history-badge">REG 2</span>
+                <span class="history-km" id="valHist2">-- km</span>
+                <span class="history-miles" id="valHistMiles2">-- mi</span>
+              </div>
+              <div class="history-item">
+                <span class="history-badge">REG 3</span>
+                <span class="history-km" id="valHist3">-- km</span>
+                <span class="history-miles" id="valHistMiles3">-- mi</span>
+              </div>
+            </div>
+            <div class="history-summary" id="batteryHistorySummary">
+              Ready to query DME replacement history.
+            </div>
+          </div>
+
+          <!-- Card 3: Battery Replacement Registration Routine -->
+          <div class="service-card full-width">
+            <div class="service-card-header">
+              <span class="service-tag warning">ROUTINE CONTROL 0x31 (ID 0x0219)</span>
+              <h3>Register New Battery Replacement</h3>
+            </div>
+            <p class="service-desc">
+              Registering a replacement battery informs the BMW Digital Motor Electronics (DME) that a new battery has been installed.
+              The DME resets battery aging statistics, recalibrates the alternator charging map to prevent overcharging new AGM plates, and stores the current odometer reading in the 3-entry history.
+            </p>
+            <div class="service-checklist">
+              <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 1:</strong> Ignition ON (KL15 terminal), Engine OFF.</div>
+              <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 2:</strong> Same battery chemistry and capacity (e.g. 90Ah AGM).</div>
+              <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 3:</strong> Battery terminals clean and torqued to 5 Nm.</div>
+            </div>
+            <div class="service-action-bar">
+              <button class="btn btn-warning" id="btnRegisterBattery">⚡ REGISTER NEW BATTERY (ROUTINE 0x0219)</button>
+              <span class="service-action-status" id="batteryRegStatus"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. VEHICLE PROFILES VIEW -->
       <section id="page-profiles" class="page">
         <div class="section-toolbar">
           <div class="toolbar-title">
@@ -200,7 +311,7 @@
         <div class="update-card" id="updateCard">
           <div class="update-header">
             <div>
-              <h3 id="updateVersionTitle">Current Version: v0.2.2</h3>
+              <h3 id="updateVersionTitle">Current Version: v0.3.0</h3>
               <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
             </div>
             <span class="update-pill" id="updatePill">UP TO DATE</span>
@@ -228,6 +339,24 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" id="btnCancelClear">CANCEL</button>
           <button class="btn btn-danger" id="btnConfirmClear">CONFIRM & CLEAR CODES</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety Confirmation Modal for Battery Registration -->
+    <div class="modal-overlay" id="batteryModal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-icon">⚡</div>
+        <h3>CONFIRM BMW BATTERY REGISTRATION</h3>
+        <p class="modal-warn">
+          This will execute UDS Routine 0x0219 on the BMW DME (0x0012). It will reset internal battery aging models, restore new-battery alternator charging curves, and stamp the current vehicle odometer into DME memory.
+        </p>
+        <p class="modal-hint">
+          Requirement: Verify vehicle ignition is ON (engine NOT running).
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCancelBatteryReg">CANCEL</button>
+          <button class="btn btn-warning" id="btnConfirmBatteryReg">EXECUTE ROUTINE 0x0219</button>
         </div>
       </div>
     </div>

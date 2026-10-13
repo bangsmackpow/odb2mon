@@ -70,6 +70,9 @@ function initApp() {
       if (targetElem) {
         targetElem.classList.add('active');
       }
+      if (targetPage === 'service') {
+        fetchBatteryStatus();
+      }
     });
   });
 
@@ -299,6 +302,163 @@ function initApp() {
         }
       } catch (err) {
         if (uStatus) uStatus.innerText = 'Update check error: ' + err;
+      }
+    });
+  }
+
+  // BMW Service & Battery Telemetry Controller
+  const valBatSoc = document.getElementById('valBatSoc');
+  const batSocBar = document.getElementById('batSocBar');
+  const valBatVoltage = document.getElementById('valBatVoltage');
+  const valBatCurrent = document.getElementById('valBatCurrent');
+  const valBatTemp = document.getElementById('valBatTemp');
+  const valBatType = document.getElementById('valBatType');
+  const batteryUnsupportedBanner = document.getElementById('batteryUnsupportedBanner');
+  const batteryServiceGrid = document.getElementById('batteryServiceGrid');
+  const batteryModal = document.getElementById('batteryModal');
+  const batteryRegStatus = document.getElementById('batteryRegStatus');
+  const batteryHistorySummary = document.getElementById('batteryHistorySummary');
+
+  async function fetchBatteryStatus() {
+    try {
+      const bat = await callBackend('get_battery_status');
+      if (!bat) return;
+
+      if (!bat.supported) {
+        if (batteryUnsupportedBanner) batteryUnsupportedBanner.style.display = 'block';
+        if (batteryServiceGrid) batteryServiceGrid.style.opacity = '0.5';
+        return;
+      }
+
+      if (batteryUnsupportedBanner) batteryUnsupportedBanner.style.display = 'none';
+      if (batteryServiceGrid) batteryServiceGrid.style.opacity = '1';
+
+      // SoC
+      const soc = Math.round(bat.state_of_charge_percent);
+      if (valBatSoc) valBatSoc.innerText = `${soc} %`;
+      if (batSocBar) {
+        batSocBar.style.width = `${Math.min(Math.max(soc, 0), 100)}%`;
+        if (soc < 50) {
+          batSocBar.style.background = 'var(--accent-red)';
+        } else if (soc < 70) {
+          batSocBar.style.background = 'var(--accent-amber)';
+        } else {
+          batSocBar.style.background = 'linear-gradient(90deg, #ff9800, #00e676)';
+        }
+      }
+
+      // Voltage
+      if (valBatVoltage) {
+        valBatVoltage.innerText = `${bat.voltage.toFixed(2)} V`;
+      }
+
+      // Net Current
+      if (valBatCurrent) {
+        const sign = bat.current_amps > 0 ? '+' : '';
+        valBatCurrent.innerText = `${sign}${bat.current_amps.toFixed(1)} A`;
+        valBatCurrent.style.color = bat.current_amps >= 0 ? 'var(--accent-green)' : '#ff8a80';
+      }
+
+      // Temperature
+      if (valBatTemp) {
+        valBatTemp.innerText = `${bat.temperature_celsius.toFixed(1)} °C`;
+      }
+
+      // Capacity & Type
+      if (valBatType) {
+        const cap = bat.capacity_ah ? `${bat.capacity_ah} Ah` : '90 Ah';
+        const type = bat.battery_type || 'AGM';
+        valBatType.innerText = `${cap} · ${type}`;
+      }
+
+      // History
+      const history = bat.last_replacement_km || [];
+      const valHist1 = document.getElementById('valHist1');
+      const valHistMiles1 = document.getElementById('valHistMiles1');
+      const valHist2 = document.getElementById('valHist2');
+      const valHistMiles2 = document.getElementById('valHistMiles2');
+      const valHist3 = document.getElementById('valHist3');
+      const valHistMiles3 = document.getElementById('valHistMiles3');
+
+      if (valHist1) {
+        if (history.length > 0 && history[0] > 0) {
+          valHist1.innerText = `${history[0].toLocaleString()} km`;
+          if (valHistMiles1) valHistMiles1.innerText = `~${Math.round(history[0] * 0.621371).toLocaleString()} mi`;
+        } else {
+          valHist1.innerText = '-- km';
+          if (valHistMiles1) valHistMiles1.innerText = '-- mi';
+        }
+      }
+
+      if (valHist2) {
+        if (history.length > 1 && history[1] > 0) {
+          valHist2.innerText = `${history[1].toLocaleString()} km`;
+          if (valHistMiles2) valHistMiles2.innerText = `~${Math.round(history[1] * 0.621371).toLocaleString()} mi`;
+        } else {
+          valHist2.innerText = '-- km';
+          if (valHistMiles2) valHistMiles2.innerText = '-- mi';
+        }
+      }
+
+      if (valHist3) {
+        if (history.length > 2 && history[2] > 0) {
+          valHist3.innerText = `${history[2].toLocaleString()} km`;
+          if (valHistMiles3) valHistMiles3.innerText = `~${Math.round(history[2] * 0.621371).toLocaleString()} mi`;
+        } else {
+          valHist3.innerText = '-- km';
+          if (valHistMiles3) valHistMiles3.innerText = '-- mi';
+        }
+      }
+
+      if (batteryHistorySummary) {
+        if (history.length > 0) {
+          batteryHistorySummary.innerText = `Last registration confirmed at ${history[0].toLocaleString()} km. DME charging profile calibrated.`;
+        } else {
+          batteryHistorySummary.innerText = 'No prior battery replacement registrations logged in DME.';
+        }
+      }
+    } catch (err) {
+      if (batteryUnsupportedBanner) batteryUnsupportedBanner.style.display = 'block';
+      if (batteryServiceGrid) batteryServiceGrid.style.opacity = '0.5';
+    }
+  }
+
+  // Hook up button handlers
+  const btnRefreshBattery = document.getElementById('btnRefreshBattery');
+  if (btnRefreshBattery) {
+    btnRefreshBattery.addEventListener('click', () => {
+      fetchBatteryStatus();
+    });
+  }
+
+  const btnRegisterBattery = document.getElementById('btnRegisterBattery');
+  if (btnRegisterBattery) {
+    btnRegisterBattery.addEventListener('click', () => {
+      if (batteryModal) batteryModal.style.display = 'flex';
+    });
+  }
+
+  const btnCancelBatteryReg = document.getElementById('btnCancelBatteryReg');
+  if (btnCancelBatteryReg) {
+    btnCancelBatteryReg.addEventListener('click', () => {
+      if (batteryModal) batteryModal.style.display = 'none';
+    });
+  }
+
+  const btnConfirmBatteryReg = document.getElementById('btnConfirmBatteryReg');
+  if (btnConfirmBatteryReg) {
+    btnConfirmBatteryReg.addEventListener('click', async () => {
+      try {
+        if (batteryRegStatus) batteryRegStatus.innerText = 'Executing Routine 0x0219...';
+        const msg = await callBackend('register_battery');
+        if (batteryModal) batteryModal.style.display = 'none';
+        if (batteryRegStatus) batteryRegStatus.innerText = '✓ Success: Battery registered in DME!';
+        await fetchBatteryStatus();
+        alert(msg || 'Battery registration successful!');
+      } catch (err) {
+        if (batteryModal) batteryModal.style.display = 'none';
+        if (batteryRegStatus) batteryRegStatus.innerText = 'Error: ' + err;
+        alert('Failed to register battery: ' + err);
       }
     });
   }

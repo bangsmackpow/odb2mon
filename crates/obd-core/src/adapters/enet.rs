@@ -1,6 +1,6 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
-use crate::profile::{DtcRecord, ParameterType, ParameterValue, VehicleProfile};
+use crate::profile::{BatteryStatus, DtcRecord, ParameterType, ParameterValue, VehicleProfile};
 use crate::protocols::doip;
 use crate::protocols::uds;
 use async_trait::async_trait;
@@ -166,6 +166,46 @@ impl ObdConnection for EnetConnection {
         } else {
             Err(ObdError::Protocol("ECU rejected DTC clear request".into()))
         }
+    }
+
+    async fn read_battery_status(&mut self) -> Result<BatteryStatus, ObdError> {
+        // Query IBS live data DID 0xD010
+        let req = uds::build_read_did_request(0xD010);
+        let resp = match self.send_uds_request(&req).await {
+            Ok(r) => r,
+            Err(ObdError::NegativeResponse {
+                service_id: 0x22,
+                nrc: 0x22,
+                ..
+            }) => {
+                self.elevate_to_extended_session().await?;
+                self.send_uds_request(&req).await?
+            }
+            Err(e) => return Err(e),
+        };
+        let mut status = uds::parse_battery_telemetry_response(0xD010, &resp)?;
+
+        // Query battery replacement history DID 0x2036
+        let hist_req = uds::build_read_did_request(0x2036);
+        if let Ok(hist_resp) = self.send_uds_request(&hist_req).await {
+            if let Ok(history) = uds::parse_battery_history_response(&hist_resp) {
+                status.last_replacement_km = history;
+            }
+        }
+
+        Ok(status)
+    }
+
+    async fn register_battery_replacement(&mut self) -> Result<String, ObdError> {
+        // Ensure session is elevated to Extended Diagnostic Session (0x10 0x03)
+        self.elevate_to_extended_session().await?;
+
+        // Routine 0x0219: BMW DME Battery Replacement Registration
+        let req = uds::build_start_routine(uds::ROUTINE_BMW_BATTERY_REGISTRATION, &[]);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_BATTERY_REGISTRATION, &resp)?;
+
+        Ok("Battery replacement registered successfully in DME memory. Alternator charging curve & battery aging history reset to 0 km.".into())
     }
 
     fn profile(&self) -> VehicleProfile {

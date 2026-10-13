@@ -87,3 +87,16 @@ pub struct DashboardSnapshot {
     pub connection_status: String,
     pub active_dtcs: Vec<DtcRecord>,
 }
+
+/// Detailed Intelligent Battery Sensor (IBS) and Power Management telemetry.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BatteryStatus {
+    pub supported: bool,
+    pub state_of_charge_percent: f32,
+    pub voltage: f32,
+    pub current_amps: f32,
+    pub temperature_celsius: f32,
+    pub capacity_ah: Option<u32>,
+    pub battery_type: Option<String>,
+    pub last_replacement_km: Vec<u32>,
+}

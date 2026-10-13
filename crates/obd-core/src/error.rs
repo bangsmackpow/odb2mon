@@ -40,6 +40,9 @@ pub enum ObdError {
 
     #[error("DTC operation failed: {0}")]
     DtcError(String),
+
+    #[error("Operation unsupported: {0}")]
+    Unsupported(String),
 }
 
 impl ObdError {

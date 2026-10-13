@@ -102,3 +102,37 @@ async fn test_vehicle_manager_decoupled_snapshots() {
 
     join_handle.abort();
 }
+
+#[tokio::test]
+async fn test_bmw_battery_registration_and_telemetry() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    let battery = conn.read_battery_status().await.unwrap();
+    assert!(battery.supported);
+    assert_eq!(battery.state_of_charge_percent, 86.5);
+    assert_eq!(battery.capacity_ah, Some(90));
+    assert_eq!(battery.last_replacement_km, vec![142300, 78100]);
+
+    // Register a new battery
+    let reg_msg = conn.register_battery_replacement().await.unwrap();
+    assert!(reg_msg.contains("168450 km"));
+
+    // Verify history and SoC were updated
+    let battery_updated = conn.read_battery_status().await.unwrap();
+    assert_eq!(battery_updated.state_of_charge_percent, 100.0);
+    assert_eq!(battery_updated.last_replacement_km[0], 168450);
+    assert_eq!(battery_updated.last_replacement_km[1], 142300);
+}
+
+#[tokio::test]
+async fn test_gmc_battery_registration_unsupported() {
+    let mut conn = MockConnection::new(VehicleProfile::GmcAcadia_2010);
+    conn.connect().await.unwrap();
+
+    let err = conn.read_battery_status().await.unwrap_err();
+    assert!(matches!(err, obd_core::ObdError::Unsupported(_)));
+
+    let reg_err = conn.register_battery_replacement().await.unwrap_err();
+    assert!(matches!(reg_err, obd_core::ObdError::Unsupported(_)));
+}

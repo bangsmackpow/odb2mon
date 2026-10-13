@@ -1,6 +1,6 @@
 use obd_core::{
-    check_for_updates, BluetoothConnection, DashboardSnapshot, DtcRecord, EnetConnection,
-    MockConnection, ObdConnection, UpdateInfo, VehicleManager, VehicleProfile,
+    check_for_updates, BatteryStatus, BluetoothConnection, DashboardSnapshot, DtcRecord,
+    EnetConnection, MockConnection, ObdConnection, UpdateInfo, VehicleManager, VehicleProfile,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -98,6 +98,20 @@ async fn check_update() -> Result<UpdateInfo, String> {
         .map_err(|e| format!("Update check failed: {e}"))
 }
 
+#[tauri::command]
+async fn get_battery_status(state: State<'_, AppState>) -> Result<BatteryStatus, String> {
+    let mgr = state.manager.lock().await;
+    mgr.read_battery_status().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn register_battery(state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.register_battery_replacement()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Default initial connection to realistic simulator
@@ -117,7 +131,9 @@ pub fn run() {
             switch_profile,
             read_fault_codes,
             clear_fault_codes,
-            check_update
+            check_update,
+            get_battery_status,
+            register_battery
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {
