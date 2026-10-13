@@ -24,10 +24,18 @@ pub struct VehicleManager {
     snapshot_rx: watch::Receiver<DashboardSnapshot>,
     event_tx: mpsc::Sender<String>,
     datalog_session: Arc<Mutex<DatalogSession>>,
+    active_vehicle_id: Arc<Mutex<String>>,
 }
 
 impl VehicleManager {
     pub fn new(connection: Box<dyn ObdConnection>) -> (Self, mpsc::Receiver<String>) {
+        Self::new_with_vehicle(connection, "veh_bmw_f10_535i".into())
+    }
+
+    pub fn new_with_vehicle(
+        connection: Box<dyn ObdConnection>,
+        vehicle_id: String,
+    ) -> (Self, mpsc::Receiver<String>) {
         let (snapshot_tx, snapshot_rx) = watch::channel(DashboardSnapshot::default());
         let (event_tx, event_rx) = mpsc::channel(64);
 
@@ -37,9 +45,27 @@ impl VehicleManager {
             snapshot_rx,
             event_tx,
             datalog_session: Arc::new(Mutex::new(DatalogSession::default())),
+            active_vehicle_id: Arc::new(Mutex::new(vehicle_id)),
         };
 
         (manager, event_rx)
+    }
+
+    /// Returns currently active vehicle ID.
+    pub async fn get_active_vehicle_id(&self) -> String {
+        self.active_vehicle_id.lock().await.clone()
+    }
+
+    /// Sets active vehicle ID for persistent logging.
+    pub async fn set_active_vehicle_id(&self, id: String) {
+        let mut cur = self.active_vehicle_id.lock().await;
+        *cur = id;
+    }
+
+    /// Reads vehicle VIN across active adapter protocol.
+    pub async fn read_vin(&self) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.read_vin().await
     }
 
     /// Subscribes to real-time telemetry snapshots (suitable for UI watchers/events).
@@ -135,7 +161,7 @@ impl VehicleManager {
             let rt = FALLBACK_RUNTIME.get_or_init(|| {
                 tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
-                    .thread_name("odb2mon-poller")
+                    .thread_name("obd2mon-poller")
                     .build()
                     .expect("Failed to initialize background Tokio runtime")
             });
@@ -146,7 +172,19 @@ impl VehicleManager {
     /// Clears vehicle diagnostic trouble codes across the abstraction layer.
     pub async fn clear_dtcs(&self) -> Result<(), crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
-        conn.clear_dtcs().await
+        conn.clear_dtcs().await?;
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "dtc_clear".into(),
+                description: "Cleared diagnostic trouble codes across all ECUs".into(),
+                result: "Success".into(),
+            },
+        );
+        Ok(())
     }
 
     /// Queries Intelligent Battery Sensor (IBS) telemetry from vehicle controller.
@@ -160,7 +198,19 @@ impl VehicleManager {
     /// Registers a newly installed battery in engine controller memory.
     pub async fn register_battery_replacement(&self) -> Result<String, crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
-        conn.register_battery_replacement().await
+        let res = conn.register_battery_replacement().await?;
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "battery".into(),
+                description: "Registered 90Ah AGM battery replacement into DME (0x0219)".into(),
+                result: "Success".into(),
+            },
+        );
+        Ok(res)
     }
 
     /// Queries Condition Based Service (CBS) maintenance intervals and item health.
@@ -177,7 +227,19 @@ impl VehicleManager {
         item: crate::profile::CbsItemType,
     ) -> Result<String, crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
-        conn.reset_cbs_item(item).await
+        let res = conn.reset_cbs_item(item).await?;
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "cbs_reset".into(),
+                description: format!("Reset Condition Based Service item: {item:?}"),
+                result: "Success".into(),
+            },
+        );
+        Ok(res)
     }
 
     /// Performs an all-module ECU network topology scan across all vehicle bus segments.
@@ -191,7 +253,20 @@ impl VehicleManager {
     /// Starts the automated electric water pump coolant bleeding routine (Routine 0x0211 on DME).
     pub async fn start_water_pump_bleed(&self) -> Result<String, crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
-        conn.start_water_pump_bleed().await
+        let res = conn.start_water_pump_bleed().await?;
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "actuator_test".into(),
+                description: "Electric water pump coolant bleeding routine initiated (0x0211)"
+                    .into(),
+                result: "Active".into(),
+            },
+        );
+        Ok(res)
     }
 
     /// Stops / cancels the electric water pump coolant bleeding routine.
@@ -219,7 +294,20 @@ impl VehicleManager {
     /// Executes ZF 8HP transmission fluid level check routine (Routine 0x0225 on EGS).
     pub async fn start_transmission_fill_routine(&self) -> Result<String, crate::error::ObdError> {
         let mut conn = self.connection.lock().await;
-        conn.start_transmission_fill_routine().await
+        let res = conn.start_transmission_fill_routine().await?;
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "actuator_test".into(),
+                description: "ZF 8HP transmission fluid level check routine initiated (0x0225)"
+                    .into(),
+                result: "Active".into(),
+            },
+        );
+        Ok(res)
     }
 
     /// Sets radiator electric cooling fan test duty percent (Routine 0x0215: 0, 15, 50, 90).
@@ -318,12 +406,32 @@ impl VehicleManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        let file_path = format!("odb2mon_n55_log_{now_sec}.csv");
+        let file_path = format!("obd2mon_n55_log_{now_sec}.csv");
         let saved_path = if std::fs::write(&file_path, &csv).is_ok() {
             Some(file_path)
         } else {
             None
         };
+
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        if let Some(ref path) = saved_path {
+            let file_size = std::fs::metadata(path)
+                .map(|m| m.len() as usize)
+                .unwrap_or(csv.len());
+            let _ = crate::garage::append_datalog_entry(
+                &active_id,
+                crate::garage::VehicleDatalogLogEntry {
+                    filename: path.clone(),
+                    file_path: std::fs::canonicalize(path)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| path.clone()),
+                    timestamp: crate::garage::current_iso_timestamp(),
+                    sample_count,
+                    duration_seconds: duration,
+                    file_size_bytes: file_size,
+                },
+            );
+        }
 
         Ok(DatalogRecordingSummary {
             sample_count,
@@ -331,6 +439,21 @@ impl VehicleManager {
             csv_content: csv,
             saved_file_path: saved_path,
         })
+    }
+
+    /// Records a diagnostic trouble code scan into the active vehicle profile's history.
+    pub async fn record_dtc_scan(&self, dtcs: Vec<crate::profile::DtcRecord>) {
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let count = dtcs.len();
+        let _ = crate::garage::append_dtc_history(
+            &active_id,
+            crate::garage::VehicleDtcHistoryEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                dtc_count: count,
+                dtcs,
+            },
+        );
     }
 
     /// Queries datalogger recording state and elapsed metrics.

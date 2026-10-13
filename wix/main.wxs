@@ -2,38 +2,38 @@
 <Wix xmlns='http://schemas.microsoft.com/wix/2006/wi'>
     <Product
         Id='*'
-        Name='odb2mon'
+        Name='obd2mon'
         UpgradeCode='6E73B90B-5D34-453D-9D9B-053FA87E14A1'
-        Manufacturer='odb2mon Contributors'
+        Manufacturer='obd2mon Contributors'
         Language='1033'
         Codepage='1252'
-        Version='0.7.0'>
+        Version='0.8.0'>
 
-        <Package Id='*' Keywords='Installer' Description="odb2mon Vehicle Diagnostics Installer"
-            Comments='Cross-Platform OBD2/UDS Diagnostics' Manufacturer='odb2mon Contributors'
+        <Package Id='*' Keywords='Installer' Description="obd2mon Vehicle Diagnostics Installer"
+            Comments='Cross-Platform OBD2/UDS Diagnostics' Manufacturer='obd2mon Contributors'
             InstallerVersion='300' Languages='1033' Compressed='yes' SummaryCodepage='1252' Platform='x64' />
 
         <MajorUpgrade Schedule='afterInstallInitialize'
             DowngradeErrorMessage='A newer version of [ProductName] is already installed. Setup will now exit.' />
 
         <Media Id='1' Cabinet='media1.cab' EmbedCab='yes' DiskPrompt='CD-ROM #1' />
-        <Property Id='DiskPrompt' Value="odb2mon Installation [1]" />
+        <Property Id='DiskPrompt' Value="obd2mon Installation [1]" />
 
         <Directory Id='TARGETDIR' Name='SourceDir'>
             <Directory Id='DesktopFolder' Name='Desktop' />
             <Directory Id='ProgramFiles64Folder' Name='PFiles'>
-                <Directory Id='APPLICATIONFOLDER' Name='odb2mon'>
+                <Directory Id='APPLICATIONFOLDER' Name='obd2mon'>
                     <Component Id='GuiExecutable' Guid='A1B2C3D4-E5F6-47A1-8901-23456789ABCD' Win64='yes'>
-                        <File Id='odb2mon_app_exe' Name='odb2mon-app.exe' DiskId='1' Source='target\release\odb2mon-app.exe' KeyPath='yes'/>
+                        <File Id='obd2mon_app_exe' Name='obd2mon-app.exe' DiskId='1' Source='target\release\obd2mon-app.exe' KeyPath='yes'/>
                     </Component>
                     <Component Id='DesktopShortcutComponent' Guid='B2C3D4E5-F6A1-47B2-9012-3456789ABCDE' Win64='yes'>
                         <Shortcut Id="DesktopShortcut"
                                   Directory="DesktopFolder"
-                                  Name="odb2mon"
-                                  Description="odb2mon Vehicle Diagnostics Dashboard"
-                                  Target="[APPLICATIONFOLDER]odb2mon-app.exe"
+                                  Name="obd2mon"
+                                  Description="obd2mon Vehicle Diagnostics Dashboard"
+                                  Target="[APPLICATIONFOLDER]obd2mon-app.exe"
                                   WorkingDirectory="APPLICATIONFOLDER" />
-                        <RegistryValue Root="HKCU" Key="Software\odb2mon" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+                        <RegistryValue Root="HKCU" Key="Software\obd2mon" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
                     </Component>
                     <Component Id='CliExecutable' Guid='8C757B3F-2621-4197-BF5C-CD78D00E26AA' Win64='yes'>
                         <File Id='obd_cli_exe' Name='obd-cli.exe' DiskId='1' Source='target\release\obd-cli.exe' KeyPath='yes'/>

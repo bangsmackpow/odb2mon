@@ -1,4 +1,4 @@
-name: odb2mon CI/CD
+name: obd2mon CI/CD
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build Release Binaries (CLI and GUI)
-        run: cargo build --release --bin obd-cli --bin odb2mon-app
+        run: cargo build --release --bin obd-cli --bin obd2mon-app
 
       - name: Build Windows MSI Installer (WiX)
         shell: pwsh
@@ -63,37 +63,37 @@ jobs:
           $wixBin = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
           if (Test-Path "$wixBin\candle.exe") {
             & "$wixBin\candle.exe" -arch x64 -out target/wix/main.wixobj wix/main.wxs
-            & "$wixBin\light.exe" -out target/wix/odb2mon-installer.msi target/wix/main.wixobj
+            & "$wixBin\light.exe" -out target/wix/obd2mon-installer.msi target/wix/main.wixobj
           } else {
             candle.exe -arch x64 -out target/wix/main.wixobj wix/main.wxs
-            light.exe -out target/wix/odb2mon-installer.msi target/wix/main.wixobj
+            light.exe -out target/wix/obd2mon-installer.msi target/wix/main.wixobj
           }
 
       - name: Upload Windows Standalone GUI Binary
         uses: actions/upload-artifact@v4
         with:
-          name: odb2mon-gui-windows-x64-exe
-          path: target/release/odb2mon-app.exe
+          name: obd2mon-gui-windows-x64-exe
+          path: target/release/obd2mon-app.exe
 
       - name: Upload Windows Standalone CLI Binary
         uses: actions/upload-artifact@v4
         with:
-          name: odb2mon-cli-windows-x64-exe
+          name: obd2mon-cli-windows-x64-exe
           path: target/release/obd-cli.exe
 
       - name: Upload Windows MSI Installer
         uses: actions/upload-artifact@v4
         with:
-          name: odb2mon-windows-x64-msi
-          path: target/wix/odb2mon-installer.msi
+          name: obd2mon-windows-x64-msi
+          path: target/wix/obd2mon-installer.msi
 
       - name: Publish to GitHub Releases
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/wix/odb2mon-installer.msi
-            target/release/odb2mon-app.exe
+            target/wix/obd2mon-installer.msi
+            target/release/obd2mon-app.exe
             target/release/obd-cli.exe
           draft: false
           prerelease: false

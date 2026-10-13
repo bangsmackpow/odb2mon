@@ -1,4 +1,4 @@
-# odb2mon
+# obd2mon
 
 Cross-platform automotive diagnostics engine and dashboard targeting modern BMW UDS (over DoIP Ethernet) and legacy GM OBD2 (over ELM327 Bluetooth/Serial). Engineered in pure Rust with asynchronous I/O and zero UI coupling.
 
@@ -6,7 +6,7 @@ Cross-platform automotive diagnostics engine and dashboard targeting modern BMW 
 
 ## Overview
 
-`odb2mon` bridges vehicle communication buses into a unified telemetry stream for desktop and mobile targets. The system provides real-time dashboard instrumentation (RPM, road speed, coolant temperature, engine oil temperature) and Diagnostic Trouble Code (DTC) management across heterogeneous vehicle protocols:
+`obd2mon` bridges vehicle communication buses into a unified telemetry stream for desktop and mobile targets. The system provides real-time dashboard instrumentation (RPM, road speed, coolant temperature, engine oil temperature) and Diagnostic Trouble Code (DTC) management across heterogeneous vehicle protocols:
 
 - **2011 BMW 535i xDrive (F10 chassis, N55 engine):** Communicates via an ENET (RJ45-to-OBD2) cable over TCP/IP using Diagnostics over IP (DoIP, ISO 13400) and Unified Diagnostic Services (UDS, ISO 14229).
 - **2010 GMC Acadia (3.6L LLT V6):** Communicates via ELM327-compatible Bluetooth adapters over serial streams using standard SAE J1979 / ISO 15765-4 (CAN 11-bit 500k) and GM manufacturer-specific Mode 22 PIDs.
@@ -26,7 +26,7 @@ Cross-platform automotive diagnostics engine and dashboard targeting modern BMW 
 ## Repository Layout
 
 ```text
-odb2mon/
+obd2mon/
 ├── Cargo.toml                       # Workspace manifest
 ├── .github/
 │   └── workflows/

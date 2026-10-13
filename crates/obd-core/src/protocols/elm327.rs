@@ -154,6 +154,42 @@ pub fn verify_mode04_clear(raw_response: &str) -> Result<(), ObdError> {
     }
 }
 
+/// Parses SAE J1979 Mode 09 PID 02 (VIN - Vehicle Identification Number).
+pub fn parse_mode09_vin(raw_response: &str) -> Result<String, ObdError> {
+    let clean = sanitize_response(raw_response);
+    if clean.contains("NODATA") || clean.contains("?") {
+        return Err(ObdError::Unsupported(
+            "VIN query not supported on this vehicle".into(),
+        ));
+    }
+
+    let mut vin_chars = String::new();
+    let mut i = 0;
+    let bytes = clean.as_bytes();
+    while i + 1 < bytes.len() {
+        if let Ok(val) = u8::from_str_radix(std::str::from_utf8(&bytes[i..i + 2]).unwrap_or(""), 16)
+        {
+            if val.is_ascii_digit()
+                || (val.is_ascii_uppercase() && val != b'I' && val != b'O' && val != b'Q')
+            {
+                vin_chars.push(val as char);
+                if vin_chars.len() == 17 {
+                    break;
+                }
+            }
+        }
+        i += 2;
+    }
+
+    if vin_chars.len() == 17 {
+        Ok(vin_chars)
+    } else {
+        Err(ObdError::ParseError(format!(
+            "Incomplete VIN returned: '{vin_chars}' from '{raw_response}'"
+        )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +250,13 @@ mod tests {
         assert_eq!(dtcs.len(), 2);
         assert_eq!(dtcs[0].code, "P0008");
         assert_eq!(dtcs[1].code, "P0300");
+    }
+
+    #[test]
+    fn test_parse_mode09_vin() {
+        // "49 02 01 31 47 4B 4B 56 52 45 44 39 41 4A 31 32 33 34 35 36" -> "1GKKVRED9AJ123456"
+        let resp = "49 02 01 31 47 4B 4B 56 52 45 44 39 41 4A 31 32 33 34 35 36\r>";
+        let vin = parse_mode09_vin(resp).unwrap();
+        assert_eq!(vin, "1GKKVRED9AJ123456");
     }
 }

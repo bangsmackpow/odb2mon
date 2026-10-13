@@ -46,22 +46,32 @@ pub fn parse_clean_semver(tag: &str) -> Result<Version, ObdError> {
         .map_err(|e| ObdError::ParseError(format!("Failed to parse version '{tag}': {e}")))
 }
 
-/// Checks for newer releases on GitHub for `bangsmackpow/odb2mon`.
+/// Checks for newer releases on GitHub for `bangsmackpow/obd2mon` (with fallback to `bangsmackpow/odb2mon`).
 pub async fn check_for_updates(current_version_str: &str) -> Result<UpdateInfo, ObdError> {
     let current_ver = parse_clean_semver(current_version_str)?;
-    let api_url = "https://api.github.com/repos/bangsmackpow/odb2mon/releases/latest";
+    let api_url = "https://api.github.com/repos/bangsmackpow/obd2mon/releases/latest";
+    let fallback_url = "https://api.github.com/repos/bangsmackpow/odb2mon/releases/latest";
 
     let client = reqwest::Client::builder()
-        .user_agent("odb2mon-update-checker")
+        .user_agent("obd2mon-update-checker")
         .timeout(std::time::Duration::from_secs(5))
         .build()
         .map_err(|e| ObdError::ConnectionFailed(e.to_string()))?;
 
-    let response = client
+    let mut response = client
         .get(api_url)
         .send()
         .await
         .map_err(|e| ObdError::ConnectionFailed(format!("Update check request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        // Fallback to legacy repo URL if obd2mon returned non-success (e.g. 404 before repo rename)
+        if let Ok(fallback_resp) = client.get(fallback_url).send().await {
+            if fallback_resp.status().is_success() {
+                response = fallback_resp;
+            }
+        }
+    }
 
     if !response.status().is_success() {
         return Err(ObdError::Protocol(format!(
@@ -132,15 +142,15 @@ mod tests {
             tag_name: "v0.2.0".into(),
             name: Some("Release 0.2.0 - Added Live Gauges".into()),
             body: Some("Highlights:\n* Added MSI installer support\n* Live gauges".into()),
-            html_url: "https://github.com/bangsmackpow/odb2mon/releases/tag/v0.2.0".into(),
+            html_url: "https://github.com/bangsmackpow/obd2mon/releases/tag/v0.2.0".into(),
             assets: vec![
                 GitHubAsset {
-                    name: "odb2mon-0.2.0-x64.msi".into(),
-                    browser_download_url: "https://github.com/bangsmackpow/odb2mon/releases/download/v0.2.0/odb2mon-0.2.0-x64.msi".into(),
+                    name: "obd2mon-0.2.0-x64.msi".into(),
+                    browser_download_url: "https://github.com/bangsmackpow/obd2mon/releases/download/v0.2.0/obd2mon-0.2.0-x64.msi".into(),
                 },
                 GitHubAsset {
-                    name: "odb2mon.exe".into(),
-                    browser_download_url: "https://github.com/bangsmackpow/odb2mon/releases/download/v0.2.0/odb2mon.exe".into(),
+                    name: "obd2mon-app.exe".into(),
+                    browser_download_url: "https://github.com/bangsmackpow/obd2mon/releases/download/v0.2.0/obd2mon-app.exe".into(),
                 },
             ],
         };
@@ -160,7 +170,7 @@ mod tests {
             tag_name: "v0.2.0".into(),
             name: Some("v0.2.0".into()),
             body: None,
-            html_url: "https://github.com/bangsmackpow/odb2mon/releases/tag/v0.2.0".into(),
+            html_url: "https://github.com/bangsmackpow/obd2mon/releases/tag/v0.2.0".into(),
             assets: vec![],
         };
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "odb2mon",
-  "version": "0.7.0",
-  "identifier": "com.bangsmackpow.odb2mon",
+  "productName": "obd2mon",
+  "version": "0.8.0",
+  "identifier": "com.bangsmackpow.obd2mon",
   "build": {
     "frontendDist": "../ui"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "odb2mon - Vehicle Diagnostic Dashboard",
+        "title": "obd2mon - Vehicle Diagnostic Dashboard",
         "width": 1060,
         "height": 680,
         "minWidth": 820,

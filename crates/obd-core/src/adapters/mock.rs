@@ -693,6 +693,17 @@ impl ObdConnection for MockConnection {
         }
     }
 
+    async fn read_vin(&mut self) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i => Ok("WBAFR7C58BC123456".into()),
+            VehicleProfile::GmcAcadia_2010 => Ok("1GKKVRED9AJ123456".into()),
+            VehicleProfile::Simulator => Ok("WBAFR7C58BC123456".into()),
+        }
+    }
+
     fn profile(&self) -> VehicleProfile {
         self.profile
     }

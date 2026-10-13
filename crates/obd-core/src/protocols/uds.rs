@@ -24,6 +24,7 @@ pub const DID_BMW_CBS_OVERVIEW: u16 = 0xD020;
 pub const DID_BMW_WATER_PUMP_STATUS: u16 = 0x2042;
 pub const DID_BMW_TRANSMISSION_SUMP_TEMP: u16 = 0x2045;
 pub const DID_BMW_N55_DATALOG: u16 = 0xD100;
+pub const DID_VIN: u16 = 0xF190;
 
 /// Builds UDS Service 0x22 ReadDataByIdentifier request frame.
 pub fn build_read_did_request(did: u16) -> Vec<u8> {
@@ -110,6 +111,35 @@ pub fn parse_transmission_temp_response(payload: &[u8]) -> Result<f32, ObdError>
     let raw_temp = payload[3];
     let temp_c = (raw_temp as f32) - 40.0;
     Ok(temp_c)
+}
+
+/// Parses vehicle 17-character VIN from UDS DID 0xF190 response.
+pub fn parse_vin_response(payload: &[u8]) -> Result<String, ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError("Empty VIN payload".into()));
+    }
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x22),
+            nrc,
+        ));
+    }
+    if payload[0] != 0x62 {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected response SID: {:#04X}, expected 0x62",
+            payload[0]
+        )));
+    }
+    if payload.len() < 3 + 17 {
+        return Err(ObdError::ParseError(format!(
+            "VIN payload truncated: expected at least 20 bytes, got {}",
+            payload.len()
+        )));
+    }
+    let vin_bytes = &payload[3..3 + 17];
+    let vin = String::from_utf8_lossy(vin_bytes).trim().to_string();
+    Ok(vin)
 }
 
 /// Parses UDS Service 0x31 response frame.

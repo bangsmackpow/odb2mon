@@ -1,4 +1,4 @@
-# odb2mon — Feature & Technical Reference Guide
+# obd2mon — Feature & Technical Reference Guide
 
 A modern, high-performance cross-platform vehicle diagnostics application built with Rust and Tauri. Specifically engineered for BMW F-series vehicles (e.g. 2011 BMW 535i xDrive F10 / N55) communicating over ENET (Ethernet-to-OBD2 via DoIP and UDS), with fallback support for standard SAE J1979 / ELM327 Bluetooth serial adapters.
 
@@ -125,13 +125,32 @@ High-frequency (20 - 50 Hz) live engine parameter acquisition over UDS DID `0xD1
 
 ### Interactive Oscilloscope Chart & CSV Recording
 - **Real-Time Canvas Oscilloscope:** Multi-trace strip chart rendering Boost Target, Boost Actual, WGDC %, Fuel Rail Pressure, and Engine RPM with 50ms resolution.
-- **CSV Data Recording:** In-memory high-speed buffer exportable directly to disk (`odb2mon_n55_log_{timestamp}.csv`) or downloadable in-browser for analysis in Virtual Dyno or MegaLogViewer.
+- **CSV Data Recording:** In-memory high-speed buffer exportable directly to disk (`obd2mon_n55_log_{timestamp}.csv`) or downloadable in-browser for analysis in Virtual Dyno or MegaLogViewer.
 
 ---
 
 ## 9. Windows Installer & Desktop Integration
 - **WiX Toolset Windows Installer (`.msi`):**
-  - Automatically installs `odb2mon-app.exe` (GUI) and `obd-cli.exe` (CLI).
-  - Registers `odb2mon` desktop shortcut on Windows user desktop.
+  - Automatically installs `obd2mon-app.exe` (GUI) and `obd-cli.exe` (CLI).
+  - Registers `obd2mon` desktop shortcut on Windows user desktop.
   - Sets system PATH environment variable to include the installation directory.
+
+---
+
+## 10. Saved Vehicles & Garage Profile Management
+obd2mon provides comprehensive multi-vehicle garage management, hardware interface compatibility analysis, and persistent vehicle logbooks.
+
+### Features
+- **Dynamic Hardware Compatibility Intelligence:**
+  - Evaluates vehicle parameters (Make, Model, Year, Interface Type) against diagnostic protocol capability matrices.
+  - Recommends the optimal hardware cable (e.g. BMW ENET for 2010+ F/G series; K+DCAN USB for E-series; ELM327 Bluetooth for GM / Generic).
+  - Details supported vs unsupported capabilities and provides cable setup & pinout guidelines.
+- **VIN Interrogation & Protocol Auto-Detection:**
+  - Reads VIN from vehicle bus via UDS DID `0xF190` (DoIP) or SAE J1979 Mode 09 PID `0x02` (ELM327).
+  - Auto-matches against saved garage profiles to suggest switching profiles or populates new vehicle creation forms.
+- **Persistent Per-Vehicle Logbooks:**
+  - Automatically records every service action (Battery Registrations, CBS Resets, Water Pump Bleed cycles, Transmission Level cycles, DTC Clears) into persistent storage under `%APPDATA%\obd2mon\vehicles\<vehicle_id>\history.json`.
+  - Historical DTC scans record fault codes, timestamps, and freeze frame metrics.
+  - Datalog sessions track recorded CSV logs, duration, sample counts, and disk locations.
+  - Drivers can record manual maintenance entries (oil services, brakes, spark plugs) with current odometer readings.
 

@@ -7,11 +7,11 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
-authors = ["odb2mon Contributors"]
+authors = ["obd2mon Contributors"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/bangsmackpow/odb2mon"
+repository = "https://github.com/bangsmackpow/obd2mon"
 
 [workspace.dependencies]
 tokio = { version = "1.43", features = ["full"] }
@@ -25,3 +25,4 @@ bytes = "1.10"
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 semver = { version = "1.0", features = ["serde"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

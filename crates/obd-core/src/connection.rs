@@ -132,6 +132,13 @@ pub trait ObdConnection: Send + Sync {
         ))
     }
 
+    /// Automatically queries 17-character Vehicle Identification Number (VIN).
+    async fn read_vin(&mut self) -> Result<String, ObdError> {
+        Err(ObdError::Unsupported(
+            "VIN readout is not supported on this vehicle profile".into(),
+        ))
+    }
+
     /// Returns the vehicle profile associated with this connection.
     fn profile(&self) -> VehicleProfile;
 }

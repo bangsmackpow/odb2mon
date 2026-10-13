@@ -1,5 +1,5 @@
 [package]
-name = "odb2mon-app"
+name = "obd2mon-app"
 version.workspace = true
 description = "Cross-Platform Vehicle Diagnostic Dashboard"
 authors.workspace = true
@@ -23,3 +23,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tauri = { version = "2.12.3", features = ["devtools"] }
 tauri-plugin-log = "2"
+chrono = { workspace = true }

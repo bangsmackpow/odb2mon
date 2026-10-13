@@ -118,6 +118,11 @@ impl ObdConnection for BluetoothConnection {
         elm327::verify_mode04_clear(&resp)
     }
 
+    async fn read_vin(&mut self) -> Result<String, ObdError> {
+        let resp = self.send_command("09 02").await?;
+        elm327::parse_mode09_vin(&resp)
+    }
+
     fn profile(&self) -> VehicleProfile {
         VehicleProfile::GmcAcadia_2010
     }

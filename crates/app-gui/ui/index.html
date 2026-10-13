@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>odb2mon - Vehicle Diagnostics</title>
+  <title>obd2mon - Vehicle Diagnostics</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
     <!-- Top Header Navigation Bar -->
     <header class="header">
       <div class="brand">
-        <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.7.0</span>
+        <span class="brand-logo">OBD2MON</span>
+        <span class="version-badge" id="appVersion">v0.8.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -32,7 +32,7 @@
           <span class="icon">📈</span> DATALOGGER
         </button>
         <button class="nav-btn" data-page="profiles">
-          <span class="icon">⚙</span> PROFILES
+          <span class="icon">🚘</span> GARAGE
         </button>
         <button class="nav-btn" data-page="updates">
           <span class="icon">🔄</span> UPDATES
@@ -665,45 +665,63 @@
         </div>
       </section>
 
-      <!-- 6. VEHICLE PROFILES VIEW -->
+      <!-- 6. SAVED VEHICLES & GARAGE PROFILES VIEW -->
       <section id="page-profiles" class="page">
         <div class="section-toolbar">
           <div class="toolbar-title">
-            <h2>VEHICLE PROFILES & HARDWARE</h2>
-            <p>Select vehicle controller protocol and hardware interface parameters</p>
+            <h2>GARAGE & VEHICLE PROFILES</h2>
+            <p>Saved vehicles, hardware compatibility intelligence, custom connection parameters, and persistent logbooks</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="btnDetectVin">🔍 AUTO-DETECT VIN</button>
+            <button class="btn btn-primary" id="btnAddVehicle">➕ ADD NEW VEHICLE</button>
           </div>
         </div>
 
-        <div class="profile-cards">
-          <!-- Profile 1: BMW F10 -->
-          <div class="profile-card" data-profile="bmw">
-            <div class="profile-header">
-              <h3>2011 BMW 535i xDrive (F10 / N55)</h3>
-              <span class="profile-tag">UDS / DoIP (Ethernet)</span>
+        <!-- Active Vehicle Hero Banner -->
+        <div class="garage-hero-card" id="activeVehicleHero">
+          <div class="hero-header-row">
+            <div class="hero-left">
+              <span class="hero-active-tag">CURRENT ACTIVE VEHICLE</span>
+              <h3 id="heroVehicleTitle">2011 BMW 535i xDrive (F10)</h3>
+              <p class="hero-notes" id="heroVehicleNotes">Factory M-Sport, ZF 8HP45 transmission, pneumatic wastegate (PWG).</p>
             </div>
-            <p class="profile-desc">Communicates via ENET cable (RJ45-to-OBD2) using ISO 13400 DoIP and ISO 14229 UDS directly to BMW DME (0x0012).</p>
-            <div class="profile-inputs">
-              <label>Host IP: <input type="text" id="bmwHost" value="169.254.1.1"></label>
-              <label>Port: <input type="number" id="bmwPort" value="6801"></label>
+            <div class="hero-actions">
+              <button class="btn btn-secondary" id="btnViewActiveHistory">📖 VIEW HISTORY & LOGS</button>
+              <button class="btn btn-outline" id="btnEditActiveVehicle">✏️ EDIT PROFILE</button>
             </div>
-            <button class="btn btn-primary btn-select-profile" data-profile="bmw">CONNECT LIVE ENET</button>
-            <button class="btn btn-secondary btn-select-profile" data-profile="simulator_bmw">RUN IN SIMULATOR</button>
           </div>
+          <div class="hero-metrics-grid">
+            <div class="hero-metric-item">
+              <span class="h-label">VIN</span>
+              <strong class="h-val" id="heroVin">WBAFR7C58BC123456</strong>
+            </div>
+            <div class="hero-metric-item">
+              <span class="h-label">ODOMETER / MILEAGE</span>
+              <strong class="h-val" id="heroMileage">142,500 km</strong>
+            </div>
+            <div class="hero-metric-item">
+              <span class="h-label">ENGINE / DRIVETRAIN</span>
+              <strong class="h-val" id="heroEngine">3.0L Turbo Inline-6 (N55)</strong>
+            </div>
+            <div class="hero-metric-item">
+              <span class="h-label">HARDWARE INTERFACE</span>
+              <strong class="h-val" id="heroInterface">BMW ENET (169.254.1.1:6801)</strong>
+            </div>
+          </div>
+        </div>
 
-          <!-- Profile 2: GMC Acadia -->
-          <div class="profile-card" data-profile="gmc">
-            <div class="profile-header">
-              <h3>2010 GMC Acadia (3.6L LLT)</h3>
-              <span class="profile-tag">SAE J1979 / ELM327 (Serial)</span>
-            </div>
-            <p class="profile-desc">Communicates via Bluetooth ELM327 using Mode 01 standard PIDs and Mode 22 GM specific PIDs. Oil temp fallback active.</p>
-            <div class="profile-inputs">
-              <label>COM Port: <input type="text" id="gmcPort" value="COM3"></label>
-              <label>Baud Rate: <input type="number" id="gmcBaud" value="38400"></label>
-            </div>
-            <button class="btn btn-primary btn-select-profile" data-profile="gmc">CONNECT LIVE BLUETOOTH</button>
-            <button class="btn btn-secondary btn-select-profile" data-profile="simulator_gmc">RUN IN SIMULATOR</button>
+        <!-- Section: Saved Vehicles List -->
+        <div class="garage-section-header">
+          <div class="garage-section-title">
+            <h3>SAVED VEHICLES IN YOUR GARAGE</h3>
+            <span class="garage-count" id="garageCountPill">3 Vehicles</span>
           </div>
+          <p class="garage-section-desc">Select a vehicle to switch active diagnostics, or click view logs to inspect historical service records, fault code scans, and high-speed telemetry runs.</p>
+        </div>
+
+        <div class="garage-vehicles-grid" id="garageVehiclesGrid">
+          <!-- Dynamic vehicle cards rendered here -->
         </div>
       </section>
 
@@ -722,7 +740,7 @@
         <div class="update-card" id="updateCard">
           <div class="update-header">
             <div>
-              <h3 id="updateVersionTitle">Current Version: v0.6.0</h3>
+              <h3 id="updateVersionTitle">Current Version: v0.8.0</h3>
               <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
             </div>
             <span class="update-pill" id="updatePill">UP TO DATE</span>
@@ -754,6 +772,7 @@
             <button class="doc-link" data-doc="cbs">📋 Condition Based Service (CBS)</button>
             <button class="doc-link" data-doc="actuators">💧 Actuator Service Routines</button>
             <button class="doc-link" data-doc="datalogger">📈 N55 High-Speed Datalogging</button>
+            <button class="doc-link" data-doc="garage">🚘 Garage & Vehicle Profiles</button>
             <button class="doc-link" data-doc="hardware">⚙ Hardware Setup & Cable Wiring</button>
           </aside>
 
@@ -761,7 +780,7 @@
             <!-- Article 1: Architecture -->
             <article class="doc-article active" id="doc-arch">
               <h3>Vehicle Communication Architecture & Protocol Stack</h3>
-              <p>odb2mon is architected for low-latency vehicle interrogation using modern European OEM diagnostic standards:</p>
+              <p>obd2mon is architected for low-latency vehicle interrogation using modern European OEM diagnostic standards:</p>
               
               <div class="doc-card">
                 <h4>ISO 13400 (DoIP - Diagnostic over Internet Protocol)</h4>
@@ -938,7 +957,40 @@
 
               <div class="doc-card">
                 <h4>Recording Sessions & CSV Export</h4>
-                <p>Clicking <strong>START RECORDING</strong> streams all 31 engine channels into a high-performance ring buffer. On <strong>STOP & EXPORT CSV</strong>, odb2mon generates an RFC 4180 compliant CSV file saved to disk and provides instant browser download for analysis in third-party data visualization tools (Virtual Dyno, MegaLogViewer, or Excel).</p>
+                <p>Clicking <strong>START RECORDING</strong> streams all 31 engine channels into a high-performance ring buffer. On <strong>STOP & EXPORT CSV</strong>, obd2mon generates an RFC 4180 compliant CSV file saved to disk and provides instant browser download for analysis in third-party data visualization tools (Virtual Dyno, MegaLogViewer, or Excel).</p>
+              </div>
+            </article>
+
+            <!-- Article 10: Garage & Vehicle Profiles -->
+            <article class="doc-article" id="doc-garage">
+              <h3>Garage & Vehicle Profile Management</h3>
+              <p>obd2mon features persistent multi-vehicle profile management, intelligent hardware compatibility evaluation, and automated vehicle-specific logbooks.</p>
+
+              <div class="doc-card">
+                <h4>Hardware Compatibility Intelligence Engine</h4>
+                <p>When selecting or entering a vehicle's Year, Make, Model, and Interface Type, obd2mon dynamically analyzes capability matrices:</p>
+                <ul>
+                  <li><strong>BMW F-Series / G-Series (2010+):</strong> ENET cable (RJ45-to-OBD2 via ISO 13400 DoIP) recommended. Unlocks all ISTA+ equivalent features: Battery Registration (Routine 0x0219), CBS Reset (Routine 0x0220), Coolant Pump Bleeding (Routine 0x0211), ZF 8HP Fluid Temp (DID 0x2045) & Fill Level (0x0225), Radiator Fan Duty (0x0215), and N55 High-Speed Datalogging. If Bluetooth ELM327 is selected, warns user that advanced UDS routines require ENET.</li>
+                  <li><strong>BMW E-Series (Pre-2010, e.g. E90, E60):</strong> Recommends K+DCAN USB diagnostic cable with OBD2 Pin 7/8 switch. Notes that ENET is not equipped on pre-F-series gateway architectures.</li>
+                  <li><strong>GM / GMC Vehicles:</strong> Recommends ELM327 Bluetooth or OBDLink MX+. Confirms Mode 01-04 diagnostics and GM Mode 22 enhanced engine oil temperature support.</li>
+                  <li><strong>Universal / Generic OBD-II:</strong> Standard SAE J1979 emissions diagnostics supported on any 1996+ gasoline or 2008+ CAN vehicle.</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>VIN Detection & Auto-Matching</h4>
+                <p>Clicking <strong>AUTO-DETECT VIN</strong> interrogates the vehicle over UDS DID <code>0xF190</code> (ENET) or SAE J1979 Mode 09 PID <code>0x02</code> (ELM327). If the VIN matches an existing vehicle in your garage, the app offers to switch immediately; if unrecognized, it invites you to prefill a new vehicle profile.</p>
+              </div>
+
+              <div class="doc-card">
+                <h4>Persistent Vehicle Logbooks & History</h4>
+                <p>Every diagnostic action executed within obd2mon is permanently associated with the active vehicle profile:</p>
+                <ul>
+                  <li><strong>Service Events:</strong> Battery registrations, CBS maintenance resets, coolant bleeding sequences, transmission fill level cycles, and DTC memory clears are automatically stamped with timestamps and logged to <code>vehicles/&lt;vehicle_id&gt;/history.json</code>.</li>
+                  <li><strong>Diagnostic Scans:</strong> DTC scans archive fault codes, freeze metadata, and historical fault counts.</li>
+                  <li><strong>Datalog Sessions:</strong> High-speed N55 CSV recordings are indexed with duration, sample count, and disk paths.</li>
+                  <li><strong>Manual Maintenance Notes:</strong> Drivers can manually log oil changes, brake replacements, spark plug renewals, and custom vehicle notes with odometer readings.</li>
+                </ul>
               </div>
             </article>
 
@@ -1059,6 +1111,218 @@
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" id="btnCloseEcuModal">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vehicle Profile Editor Modal -->
+    <div class="modal-overlay" id="vehicleEditorModal" style="display: none;">
+      <div class="modal-card vehicle-editor-modal-card">
+        <div class="modal-header-row">
+          <div>
+            <h3 id="vehEditorTitle">ADD VEHICLE TO GARAGE</h3>
+            <span class="ecu-modal-sub">Configure vehicle specifications, protocol selection, and hardware interface</span>
+          </div>
+          <button class="modal-close-btn" id="btnCancelVehEditorX">✕</button>
+        </div>
+
+        <!-- Quick Template Presets Bar -->
+        <div class="presets-bar">
+          <span class="presets-label">QUICK TEMPLATES:</span>
+          <div class="presets-buttons">
+            <button type="button" class="preset-btn" data-preset="blank">Blank / Custom</button>
+            <button type="button" class="preset-btn" data-preset="generic">General / Generic OBD-II</button>
+            <button type="button" class="preset-btn" data-preset="bmw_f10">BMW F10 / F-Series (ENET)</button>
+            <button type="button" class="preset-btn" data-preset="bmw_e90">BMW E-Series (K+DCAN)</button>
+            <button type="button" class="preset-btn" data-preset="gmc">GMC Acadia / GM (Bluetooth)</button>
+          </div>
+        </div>
+
+        <form id="vehicleEditForm" class="vehicle-form">
+          <input type="hidden" id="vehEditId" value="">
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="vehEditNickname">Profile Nickname *</label>
+              <input type="text" id="vehEditNickname" placeholder="e.g. 2011 BMW 535i xDrive" required>
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditYear">Model Year *</label>
+              <input type="number" id="vehEditYear" min="1990" max="2030" value="2011" required>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="vehEditMake">Make / Manufacturer *</label>
+              <input type="text" id="vehEditMake" placeholder="e.g. BMW, GMC, Toyota" required>
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditModel">Model *</label>
+              <input type="text" id="vehEditModel" placeholder="e.g. 535i xDrive, Acadia" required>
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditEngine">Engine / Powertrain</label>
+              <input type="text" id="vehEditEngine" placeholder="e.g. 3.0L N55 Turbo, 3.6L LLT">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="vehEditVin">VIN (17 Characters)</label>
+              <div class="input-with-action">
+                <input type="text" id="vehEditVin" maxlength="17" placeholder="e.g. WBAFR7C58BC123456" style="text-transform: uppercase;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnAutoQueryVin">🔍 READ FROM BUS</button>
+              </div>
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditMileage">Odometer Mileage</label>
+              <div class="input-with-action">
+                <input type="number" id="vehEditMileage" min="0" placeholder="e.g. 142500">
+                <select id="vehEditMileageUnit" style="width: 70px;">
+                  <option value="km">km</option>
+                  <option value="mi">mi</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="vehEditInterface">Hardware Interface Type *</label>
+              <select id="vehEditInterface">
+                <option value="enet">BMW ENET (Ethernet-to-OBD2 / ISO 13400 DoIP)</option>
+                <option value="bluetooth">ELM327 Bluetooth (Serial COM Port)</option>
+                <option value="usb">ELM327 / K+DCAN USB (Serial COM Port)</option>
+                <option value="simulator">Diagnostic Simulator (Built-in Mock)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Conditional Hardware Settings -->
+          <div class="form-row interface-fields" id="enetFields">
+            <div class="form-group flex-2">
+              <label for="vehEditEnetHost">Ethernet Host IP</label>
+              <input type="text" id="vehEditEnetHost" value="169.254.1.1">
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditEnetPort">TCP Port</label>
+              <input type="number" id="vehEditEnetPort" value="6801">
+            </div>
+          </div>
+
+          <div class="form-row interface-fields" id="serialFields" style="display: none;">
+            <div class="form-group flex-1">
+              <label for="vehEditSerialPort">Serial COM Port</label>
+              <input type="text" id="vehEditSerialPort" value="COM3" placeholder="e.g. COM3 or /dev/ttyUSB0">
+            </div>
+            <div class="form-group flex-1">
+              <label for="vehEditSerialBaud">Baud Rate</label>
+              <select id="vehEditSerialBaud">
+                <option value="38400">38400 (Standard ELM327)</option>
+                <option value="115200">115200 (High-Speed OBDLink)</option>
+                <option value="9600">9600 (Legacy)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="vehEditNotes">Vehicle Notes / Modifications / Service Records</label>
+            <textarea id="vehEditNotes" rows="2" placeholder="e.g. Stage 1 tune, Catless downpipe, upgraded charge pipe..."></textarea>
+          </div>
+
+          <!-- Dynamic Hardware Intelligence & Compatibility Evaluation Box -->
+          <div class="compat-intel-box" id="compatIntelBox">
+            <div class="compat-header">
+              <span class="intel-tag">⚡ HARDWARE COMPATIBILITY INTELLIGENCE</span>
+              <h4 id="compatRecTitle">Recommended: BMW ENET</h4>
+            </div>
+            <div class="compat-columns">
+              <div class="compat-col supported">
+                <h5>✓ SUPPORTED CAPABILITIES ON THIS VEHICLE</h5>
+                <ul id="compatSupportedList">
+                  <!-- Supported items -->
+                </ul>
+              </div>
+              <div class="compat-col unsupported" id="compatUnsupportedCol">
+                <h5>⚠️ UNSUPPORTED / PROTOCOL LIMITATIONS</h5>
+                <ul id="compatUnsupportedList">
+                  <!-- Unsupported items -->
+                </ul>
+              </div>
+            </div>
+            <div class="compat-cable-advice" id="compatCableAdvice">
+              Connect using standard RJ45-to-OBD2 cable.
+            </div>
+          </div>
+
+          <div class="modal-actions" style="margin-top: 20px;">
+            <button type="button" class="btn btn-secondary" id="btnCancelVehEditor">CANCEL</button>
+            <button type="button" class="btn btn-secondary" id="btnSaveVehProfileOnly">💾 SAVE TO GARAGE</button>
+            <button type="submit" class="btn btn-primary" id="btnSaveAndActivate">🚀 SAVE & ACTIVATE</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Vehicle History & Logs Modal -->
+    <div class="modal-overlay" id="vehicleHistoryModal" style="display: none;">
+      <div class="modal-card vehicle-history-modal-card">
+        <div class="modal-header-row">
+          <div>
+            <h3 id="histModalTitle">VEHICLE LOGBOOK & HISTORY</h3>
+            <span class="ecu-modal-sub" id="histModalSubtitle">2011 BMW 535i xDrive · Persistent Maintenance & Telemetry Archive</span>
+          </div>
+          <button class="modal-close-btn" id="btnCloseHistoryModalX">✕</button>
+        </div>
+
+        <!-- History Filter Subtabs -->
+        <div class="history-tabs-bar">
+          <button class="hist-tab active" data-filter="all">ALL ENTRIES (<span id="histCountAll">0</span>)</button>
+          <button class="hist-tab" data-filter="service">SERVICE & ACTUATORS (<span id="histCountService">0</span>)</button>
+          <button class="hist-tab" data-filter="dtc">DTC SCANS (<span id="histCountDtc">0</span>)</button>
+          <button class="hist-tab" data-filter="datalog">DATALOG SESSIONS (<span id="histCountDatalog">0</span>)</button>
+        </div>
+
+        <!-- Add Manual Log Entry Section -->
+        <div class="add-log-section">
+          <div class="add-log-header" id="toggleAddLogHeader">
+            <span>➕ ADD MANUAL SERVICE OR MAINTENANCE NOTE</span>
+            <span class="toggle-icon" id="addLogToggleIcon">▼</span>
+          </div>
+          <div class="add-log-body" id="addLogBody" style="display: none;">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>Category</label>
+                <select id="manualLogCategory">
+                  <option value="note">General Maintenance Note</option>
+                  <option value="oil">Oil & Fluid Service</option>
+                  <option value="brakes">Brakes & Chassis</option>
+                  <option value="spark_plugs">Ignition / Spark Plugs</option>
+                  <option value="cooling">Cooling System</option>
+                  <option value="battery">Battery & Electrical</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
+                <label>Odometer Mileage</label>
+                <input type="number" id="manualLogMileage" placeholder="e.g. 143200">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Service Description</label>
+              <input type="text" id="manualLogText" placeholder="e.g. Replaced engine oil with Motul 8100 5W-40 and OEM Mann filter">
+            </div>
+            <button class="btn btn-primary btn-sm" id="btnSaveManualLog" style="margin-top: 8px;">RECORD TO VEHICLE LOGBOOK</button>
+          </div>
+        </div>
+
+        <!-- History Timeline Container -->
+        <div class="history-timeline-container" id="historyTimeline">
+          <!-- Dynamic history items rendered here -->
+        </div>
+
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="btn btn-secondary" id="btnCloseHistoryModal">CLOSE</button>
         </div>
       </div>
     </div>

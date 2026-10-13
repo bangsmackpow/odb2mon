@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Command-line diagnostic dashboard and validation tool for odb2mon"
+description = "Command-line diagnostic dashboard and validation tool for obd2mon"
 
 [dependencies]
 obd-core = { path = "../obd-core" }

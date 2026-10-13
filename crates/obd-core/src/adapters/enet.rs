@@ -452,6 +452,12 @@ impl ObdConnection for EnetConnection {
         Ok(frame)
     }
 
+    async fn read_vin(&mut self) -> Result<String, ObdError> {
+        let req = uds::build_read_did_request(uds::DID_VIN);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_vin_response(&resp)
+    }
+
     fn profile(&self) -> VehicleProfile {
         VehicleProfile::BmwF10_535i
     }

@@ -11,7 +11,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     println!("=====================================================");
-    println!("  odb2mon - Cross-Platform Vehicle Diagnostic System  ");
+    println!("  obd2mon - Cross-Platform Vehicle Diagnostic System  ");
     let version = env!("CARGO_PKG_VERSION");
     println!("  Version: v{version} (Windows x64)");
     println!("=====================================================");

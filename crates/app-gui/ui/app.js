@@ -1,4 +1,4 @@
-// odb2mon - Vehicle Diagnostic Dashboard Client Controller
+// obd2mon - Vehicle Diagnostic Dashboard Client Controller
 
 // 1. Safe Tauri API Discovery
 function getTauriInvoke() {
@@ -33,7 +33,7 @@ let currentActiveDtcs = [];
 
 // 2. Application Initializer
 function initApp() {
-  console.log('[odb2mon] Initializing dashboard UI controller...');
+  console.log('[obd2mon] Initializing dashboard UI controller...');
 
   // DOM References
   const navButtons = document.querySelectorAll('.nav-btn');
@@ -130,6 +130,9 @@ function initApp() {
         fetchBatteryStatus();
         fetchCbsReport();
         fetchActuatorsStatus();
+      }
+      if (targetPage === 'profiles') {
+        fetchGarage();
       }
       if (targetPage === 'datalog') {
         startDatalogStream();
@@ -297,32 +300,672 @@ function initApp() {
     });
   }
 
-  // Vehicle Profile Selector
-  document.querySelectorAll('.btn-select-profile').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const profile = btn.dataset.profile;
-      const bmwHost = document.getElementById('bmwHost') ? document.getElementById('bmwHost').value : '169.254.1.1';
-      const bmwPort = document.getElementById('bmwPort') ? parseInt(document.getElementById('bmwPort').value, 10) : 6801;
-      const gmcPort = document.getElementById('gmcPort') ? document.getElementById('gmcPort').value : 'COM3';
-      const gmcBaud = document.getElementById('gmcBaud') ? parseInt(document.getElementById('gmcBaud').value, 10) : 38400;
+  // ====================================================
+  // GARAGE & VEHICLE PROFILES CONTROLLER
+  // ====================================================
+  let currentGarage = null;
+  let viewingVehicleId = null;
+  let currentHistoryData = null;
+  let currentHistoryFilter = 'all';
 
-      try {
-        const res = await callBackend('switch_profile', {
-          profileType: profile,
-          enetHost: bmwHost,
-          enetPort: bmwPort,
-          btPort: gmcPort,
-          btBaud: gmcBaud,
-        });
-        const vName = document.getElementById('vehicleName');
-        if (vName && res) vName.innerText = res;
-        // Navigate back to Dashboard tab
+  // DOM elements for Garage
+  const btnDetectVin = document.getElementById('btnDetectVin');
+  const btnAddVehicle = document.getElementById('btnAddVehicle');
+  const heroVehicleTitle = document.getElementById('heroVehicleTitle');
+  const heroVehicleNotes = document.getElementById('heroVehicleNotes');
+  const btnViewActiveHistory = document.getElementById('btnViewActiveHistory');
+  const btnEditActiveVehicle = document.getElementById('btnEditActiveVehicle');
+  const heroVin = document.getElementById('heroVin');
+  const heroMileage = document.getElementById('heroMileage');
+  const heroEngine = document.getElementById('heroEngine');
+  const heroInterface = document.getElementById('heroInterface');
+  const garageCountPill = document.getElementById('garageCountPill');
+  const garageVehiclesGrid = document.getElementById('garageVehiclesGrid');
+
+  // Editor Modal elements
+  const vehicleEditorModal = document.getElementById('vehicleEditorModal');
+  const vehEditorTitle = document.getElementById('vehEditorTitle');
+  const btnCancelVehEditorX = document.getElementById('btnCancelVehEditorX');
+  const btnCancelVehEditor = document.getElementById('btnCancelVehEditor');
+  const vehicleEditForm = document.getElementById('vehicleEditForm');
+  const vehEditId = document.getElementById('vehEditId');
+  const vehEditNickname = document.getElementById('vehEditNickname');
+  const vehEditYear = document.getElementById('vehEditYear');
+  const vehEditMake = document.getElementById('vehEditMake');
+  const vehEditModel = document.getElementById('vehEditModel');
+  const vehEditEngine = document.getElementById('vehEditEngine');
+  const vehEditVin = document.getElementById('vehEditVin');
+  const btnAutoQueryVin = document.getElementById('btnAutoQueryVin');
+  const vehEditMileage = document.getElementById('vehEditMileage');
+  const vehEditMileageUnit = document.getElementById('vehEditMileageUnit');
+  const vehEditInterface = document.getElementById('vehEditInterface');
+  const enetFields = document.getElementById('enetFields');
+  const vehEditEnetHost = document.getElementById('vehEditEnetHost');
+  const vehEditEnetPort = document.getElementById('vehEditEnetPort');
+  const serialFields = document.getElementById('serialFields');
+  const vehEditSerialPort = document.getElementById('vehEditSerialPort');
+  const vehEditSerialBaud = document.getElementById('vehEditSerialBaud');
+  const vehEditNotes = document.getElementById('vehEditNotes');
+  const compatRecTitle = document.getElementById('compatRecTitle');
+  const compatSupportedList = document.getElementById('compatSupportedList');
+  const compatUnsupportedList = document.getElementById('compatUnsupportedList');
+  const compatUnsupportedCol = document.getElementById('compatUnsupportedCol');
+  const compatCableAdvice = document.getElementById('compatCableAdvice');
+  const btnSaveVehProfileOnly = document.getElementById('btnSaveVehProfileOnly');
+
+  // History Modal elements
+  const vehicleHistoryModal = document.getElementById('vehicleHistoryModal');
+  const histModalTitle = document.getElementById('histModalTitle');
+  const histModalSubtitle = document.getElementById('histModalSubtitle');
+  const btnCloseHistoryModalX = document.getElementById('btnCloseHistoryModalX');
+  const btnCloseHistoryModal = document.getElementById('btnCloseHistoryModal');
+  const histCountAll = document.getElementById('histCountAll');
+  const histCountService = document.getElementById('histCountService');
+  const histCountDtc = document.getElementById('histCountDtc');
+  const histCountDatalog = document.getElementById('histCountDatalog');
+  const toggleAddLogHeader = document.getElementById('toggleAddLogHeader');
+  const addLogToggleIcon = document.getElementById('addLogToggleIcon');
+  const addLogBody = document.getElementById('addLogBody');
+  const manualLogCategory = document.getElementById('manualLogCategory');
+  const manualLogMileage = document.getElementById('manualLogMileage');
+  const manualLogText = document.getElementById('manualLogText');
+  const btnSaveManualLog = document.getElementById('btnSaveManualLog');
+  const historyTimeline = document.getElementById('historyTimeline');
+
+  async function fetchGarage() {
+    try {
+      const garage = await callBackend('get_garage');
+      if (garage) {
+        currentGarage = garage;
+        renderGarage();
+      }
+    } catch (err) {
+      console.error('Failed to load garage:', err);
+    }
+  }
+
+  function renderGarage() {
+    if (!currentGarage) return;
+    const activeVeh = currentGarage.vehicles.find(v => v.id === currentGarage.active_vehicle_id) || currentGarage.vehicles[0];
+
+    if (activeVeh) {
+      if (heroVehicleTitle) heroVehicleTitle.innerText = activeVeh.nickname || `${activeVeh.year} ${activeVeh.make} ${activeVeh.model}`;
+      if (heroVehicleNotes) heroVehicleNotes.innerText = activeVeh.notes || 'No vehicle notes specified.';
+      if (heroVin) heroVin.innerText = activeVeh.vin || 'Not Entered';
+      if (heroMileage) {
+        const miVal = activeVeh.mileage != null ? activeVeh.mileage.toLocaleString() : '--';
+        heroMileage.innerText = `${miVal} ${activeVeh.mileage_unit || 'km'}`;
+      }
+      if (heroEngine) heroEngine.innerText = activeVeh.engine || 'Standard Powertrain';
+      if (heroInterface) {
+        if (activeVeh.interface_type === 'enet') {
+          heroInterface.innerText = `BMW ENET (${activeVeh.interface_host || '169.254.1.1'}:${activeVeh.interface_port || 6801})`;
+        } else if (activeVeh.interface_type === 'bluetooth' || activeVeh.interface_type === 'usb') {
+          heroInterface.innerText = `Serial ${activeVeh.interface_type.toUpperCase()} (${activeVeh.serial_port || 'COM3'} @ ${activeVeh.serial_baud || 38400})`;
+        } else {
+          heroInterface.innerText = 'Diagnostic Simulator (Mock Engine)';
+        }
+      }
+
+      // Update header banner vehicle name
+      const vName = document.getElementById('vehicleName');
+      if (vName) {
+        vName.innerText = activeVeh.nickname || `${activeVeh.year} ${activeVeh.make} ${activeVeh.model}`;
+      }
+    }
+
+    if (garageCountPill) {
+      garageCountPill.innerText = `${currentGarage.vehicles.length} Vehicle${currentGarage.vehicles.length === 1 ? '' : 's'}`;
+    }
+
+    if (garageVehiclesGrid) {
+      garageVehiclesGrid.innerHTML = currentGarage.vehicles.map(veh => {
+        const isActive = veh.id === currentGarage.active_vehicle_id;
+        let ifaceDesc = '';
+        if (veh.interface_type === 'enet') {
+          ifaceDesc = `ENET (${veh.interface_host || '169.254.1.1'}:${veh.interface_port || 6801})`;
+        } else if (veh.interface_type === 'bluetooth' || veh.interface_type === 'usb') {
+          ifaceDesc = `${veh.interface_type.toUpperCase()} (${veh.serial_port || 'COM3'} @ ${veh.serial_baud || 38400})`;
+        } else {
+          ifaceDesc = 'Diagnostic Simulator';
+        }
+
+        const mileageStr = veh.mileage != null ? `${veh.mileage.toLocaleString()} ${veh.mileage_unit || 'km'}` : 'Not specified';
+        const vinStr = veh.vin || 'Not recorded';
+
+        return `
+          <div class="vehicle-card ${isActive ? 'is-active' : ''}" data-vehicle-id="${veh.id}">
+            <div>
+              <div class="vcard-header">
+                <div class="vcard-title">
+                  <h4>${veh.nickname}</h4>
+                  <span class="vcard-make-model">${veh.year} ${veh.make} ${veh.model}</span>
+                </div>
+                ${isActive ? '<span class="vcard-active-pill">ACTIVE</span>' : ''}
+              </div>
+
+              <div class="vcard-meta-list">
+                <div class="vcard-meta-row"><span class="lbl">VIN:</span><span class="val">${vinStr}</span></div>
+                <div class="vcard-meta-row"><span class="lbl">Odometer:</span><span class="val">${mileageStr}</span></div>
+                <div class="vcard-meta-row"><span class="lbl">Interface:</span><span class="val">${ifaceDesc}</span></div>
+                <div class="vcard-meta-row"><span class="lbl">Engine:</span><span class="val">${veh.engine || '--'}</span></div>
+              </div>
+
+              ${veh.notes ? `<div class="vcard-notes">📝 ${veh.notes}</div>` : ''}
+            </div>
+
+            <div class="vcard-actions">
+              ${!isActive ? `<button class="btn btn-primary btn-switch-veh" data-vehicle-id="${veh.id}">SWITCH & CONNECT</button>` : `<button class="btn btn-secondary" disabled>ACTIVE PROFILE</button>`}
+              <button class="btn btn-secondary btn-history-veh" data-vehicle-id="${veh.id}">VIEW LOGS</button>
+              <button class="btn btn-outline btn-edit-veh" data-vehicle-id="${veh.id}">EDIT</button>
+              ${currentGarage.vehicles.length > 1 ? `<button class="btn btn-danger btn-delete-veh" data-vehicle-id="${veh.id}">DELETE</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      garageVehiclesGrid.querySelectorAll('.btn-switch-veh').forEach(btn => {
+        btn.addEventListener('click', () => switchActiveVehicle(btn.dataset.vehicleId));
+      });
+      garageVehiclesGrid.querySelectorAll('.btn-history-veh').forEach(btn => {
+        btn.addEventListener('click', () => openVehicleHistory(btn.dataset.vehicleId));
+      });
+      garageVehiclesGrid.querySelectorAll('.btn-edit-veh').forEach(btn => {
+        btn.addEventListener('click', () => openVehicleEditor(btn.dataset.vehicleId));
+      });
+      garageVehiclesGrid.querySelectorAll('.btn-delete-veh').forEach(btn => {
+        btn.addEventListener('click', () => confirmDeleteVehicle(btn.dataset.vehicleId));
+      });
+    }
+  }
+
+  async function switchActiveVehicle(vehicleId) {
+    try {
+      const garage = await callBackend('set_active_vehicle', { vehicleId });
+      if (garage) {
+        currentGarage = garage;
+        renderGarage();
         const dashBtn = document.querySelector('.nav-btn[data-page="dashboard"]');
         if (dashBtn) dashBtn.click();
+      }
+    } catch (err) {
+      alert('Failed to activate vehicle: ' + err);
+    }
+  }
+
+  function updateInterfaceFields() {
+    if (!vehEditInterface) return;
+    const iface = vehEditInterface.value;
+    if (iface === 'enet') {
+      if (enetFields) enetFields.style.display = 'flex';
+      if (serialFields) serialFields.style.display = 'none';
+    } else if (iface === 'bluetooth' || iface === 'usb') {
+      if (enetFields) enetFields.style.display = 'none';
+      if (serialFields) serialFields.style.display = 'flex';
+    } else {
+      if (enetFields) enetFields.style.display = 'none';
+      if (serialFields) serialFields.style.display = 'none';
+    }
+    evaluateFormCompatibility();
+  }
+
+  async function evaluateFormCompatibility() {
+    if (!vehEditMake || !vehEditModel) return;
+    const make = vehEditMake.value || 'General / Generic';
+    const model = vehEditModel.value || 'Standard';
+    const year = parseInt(vehEditYear.value, 10) || 2015;
+    const interfaceType = vehEditInterface.value || 'bluetooth';
+
+    try {
+      const compat = await callBackend('get_vehicle_compatibility', {
+        make,
+        model,
+        year,
+        interfaceType,
+      });
+
+      if (compat) {
+        if (compatRecTitle) compatRecTitle.innerText = `Recommended: ${compat.recommended_interface}`;
+
+        if (compatSupportedList) {
+          compatSupportedList.innerHTML = compat.supported_features.length > 0
+            ? compat.supported_features.map(f => `<li>✓ ${f}</li>`).join('')
+            : '<li>No features available on this protocol combination</li>';
+        }
+
+        if (compatUnsupportedList) {
+          if (compat.unsupported_features.length > 0) {
+            compatUnsupportedList.innerHTML = compat.unsupported_features.map(f => `<li>⚠️ ${f}</li>`).join('');
+            if (compatUnsupportedCol) compatUnsupportedCol.style.display = 'block';
+          } else {
+            compatUnsupportedList.innerHTML = '<li>✓ All features fully supported</li>';
+            if (compatUnsupportedCol) compatUnsupportedCol.style.display = 'none';
+          }
+        }
+
+        if (compatCableAdvice) {
+          compatCableAdvice.innerText = compat.cable_notes;
+        }
+      }
+    } catch (err) {
+      console.warn('Compatibility evaluation error:', err);
+    }
+  }
+
+  function applyPreset(preset) {
+    if (preset === 'blank') {
+      vehEditId.value = '';
+      vehEditNickname.value = '';
+      vehEditYear.value = new Date().getFullYear();
+      vehEditMake.value = '';
+      vehEditModel.value = '';
+      vehEditEngine.value = '';
+      vehEditVin.value = '';
+      vehEditMileage.value = '';
+      vehEditInterface.value = 'bluetooth';
+      vehEditNotes.value = '';
+    } else if (preset === 'generic') {
+      vehEditNickname.value = 'Universal OBD-II Vehicle';
+      vehEditYear.value = 2016;
+      vehEditMake.value = 'General / Generic';
+      vehEditModel.value = 'SAE J1979 Standard';
+      vehEditEngine.value = 'Standard Engine';
+      vehEditInterface.value = 'bluetooth';
+      vehEditSerialPort.value = 'COM3';
+      vehEditSerialBaud.value = '38400';
+      vehEditNotes.value = 'Universal emissions monitoring on standard SAE J1979 Mode 01-09.';
+    } else if (preset === 'bmw_f10') {
+      vehEditNickname.value = '2011 BMW 535i xDrive (F10)';
+      vehEditYear.value = 2011;
+      vehEditMake.value = 'BMW';
+      vehEditModel.value = '535i xDrive (F10)';
+      vehEditEngine.value = '3.0L Turbo Inline-6 (N55B30M0)';
+      vehEditInterface.value = 'enet';
+      vehEditEnetHost.value = '169.254.1.1';
+      vehEditEnetPort.value = 6801;
+      vehEditNotes.value = 'Full ISTA routines: Battery registration, CBS reset, water pump bleed, N55 datalogger.';
+    } else if (preset === 'bmw_e90') {
+      vehEditNickname.value = '2008 BMW 335i (E90)';
+      vehEditYear.value = 2008;
+      vehEditMake.value = 'BMW';
+      vehEditModel.value = '335i Sedan (E90)';
+      vehEditEngine.value = '3.0L Twin-Turbo (N54B30)';
+      vehEditInterface.value = 'usb';
+      vehEditSerialPort.value = 'COM1';
+      vehEditSerialBaud.value = '38400';
+      vehEditNotes.value = 'Connected using K+DCAN USB cable with pin 7-8 bridge.';
+    } else if (preset === 'gmc') {
+      vehEditNickname.value = '2010 GMC Acadia SLE';
+      vehEditYear.value = 2010;
+      vehEditMake.value = 'GMC';
+      vehEditModel.value = 'Acadia SLE';
+      vehEditEngine.value = '3.6L V6 Direct Injection (LLT)';
+      vehEditInterface.value = 'bluetooth';
+      vehEditSerialPort.value = 'COM3';
+      vehEditSerialBaud.value = '38400';
+      vehEditNotes.value = 'Connected via ELM327 Bluetooth. Uses GM Mode 22 enhanced PIDs.';
+    }
+
+    updateInterfaceFields();
+  }
+
+  function openVehicleEditor(vehicleId) {
+    if (!vehicleEditorModal) return;
+
+    if (!vehicleId) {
+      if (vehEditorTitle) vehEditorTitle.innerText = 'ADD NEW VEHICLE TO GARAGE';
+      applyPreset('blank');
+    } else {
+      const veh = currentGarage && currentGarage.vehicles.find(v => v.id === vehicleId);
+      if (!veh) return;
+      if (vehEditorTitle) vehEditorTitle.innerText = `EDIT VEHICLE: ${veh.nickname}`;
+      vehEditId.value = veh.id;
+      vehEditNickname.value = veh.nickname;
+      vehEditYear.value = veh.year;
+      vehEditMake.value = veh.make;
+      vehEditModel.value = veh.model;
+      vehEditEngine.value = veh.engine || '';
+      vehEditVin.value = veh.vin || '';
+      vehEditMileage.value = veh.mileage != null ? veh.mileage : '';
+      vehEditMileageUnit.value = veh.mileage_unit || 'km';
+      vehEditInterface.value = veh.interface_type || 'enet';
+      if (veh.interface_host) vehEditEnetHost.value = veh.interface_host;
+      if (veh.interface_port) vehEditEnetPort.value = veh.interface_port;
+      if (veh.serial_port) vehEditSerialPort.value = veh.serial_port;
+      if (veh.serial_baud) vehEditSerialBaud.value = veh.serial_baud;
+      vehEditNotes.value = veh.notes || '';
+      updateInterfaceFields();
+    }
+
+    vehicleEditorModal.style.display = 'flex';
+  }
+
+  async function saveVehicleFromForm(setAsActive) {
+    const nickname = vehEditNickname.value.trim();
+    const make = vehEditMake.value.trim();
+    const model = vehEditModel.value.trim();
+    const year = parseInt(vehEditYear.value, 10);
+
+    if (!nickname || !make || !model || isNaN(year)) {
+      alert('Please fill in profile nickname, year, make, and model.');
+      return;
+    }
+
+    const mileageNum = parseInt(vehEditMileage.value, 10);
+    const vehicleRecord = {
+      id: vehEditId.value.trim(),
+      nickname,
+      make,
+      model,
+      year,
+      vin: vehEditVin.value.trim().toUpperCase() || null,
+      mileage: !isNaN(mileageNum) ? mileageNum : null,
+      mileage_unit: vehEditMileageUnit.value,
+      engine: vehEditEngine.value.trim() || null,
+      interface_type: vehEditInterface.value,
+      interface_host: vehEditInterface.value === 'enet' ? vehEditEnetHost.value.trim() : null,
+      interface_port: vehEditInterface.value === 'enet' ? parseInt(vehEditEnetPort.value, 10) : null,
+      serial_port: (vehEditInterface.value === 'bluetooth' || vehEditInterface.value === 'usb') ? vehEditSerialPort.value.trim() : null,
+      serial_baud: (vehEditInterface.value === 'bluetooth' || vehEditInterface.value === 'usb') ? parseInt(vehEditSerialBaud.value, 10) : null,
+      notes: vehEditNotes.value.trim() || null,
+      created_at: '',
+      last_connected_at: null,
+      active_dtc_count: 0,
+    };
+
+    try {
+      const garage = await callBackend('save_vehicle_profile', {
+        vehicle: vehicleRecord,
+        setAsActive,
+      });
+      if (garage) {
+        currentGarage = garage;
+        renderGarage();
+        if (vehicleEditorModal) vehicleEditorModal.style.display = 'none';
+        if (setAsActive) {
+          const dashBtn = document.querySelector('.nav-btn[data-page="dashboard"]');
+          if (dashBtn) dashBtn.click();
+        }
+      }
+    } catch (err) {
+      alert('Failed to save vehicle profile: ' + err);
+    }
+  }
+
+  async function confirmDeleteVehicle(vehicleId) {
+    const veh = currentGarage && currentGarage.vehicles.find(v => v.id === vehicleId);
+    const name = veh ? veh.nickname : 'this vehicle';
+    if (!confirm(`Are you sure you want to delete "${name}" from your garage? Historical logs will be preserved on disk.`)) {
+      return;
+    }
+
+    try {
+      const garage = await callBackend('delete_vehicle_profile', { vehicleId });
+      if (garage) {
+        currentGarage = garage;
+        renderGarage();
+      }
+    } catch (err) {
+      alert('Failed to delete vehicle profile: ' + err);
+    }
+  }
+
+  async function detectVinFromCar() {
+    try {
+      const res = await callBackend('detect_vehicle_vin');
+      if (res && res.vin) {
+        if (res.matched_vehicle_id) {
+          const veh = currentGarage && currentGarage.vehicles.find(v => v.id === res.matched_vehicle_id);
+          const name = veh ? veh.nickname : res.matched_vehicle_id;
+          if (confirm(`Detected VIN: ${res.vin}\nMatches saved vehicle "${name}".\n\nWould you like to switch to this profile now?`)) {
+            switchActiveVehicle(res.matched_vehicle_id);
+          }
+        } else {
+          if (confirm(`Detected VIN: ${res.vin}\n\nNo saved profile matches this VIN. Would you like to create a new vehicle profile with this VIN?`)) {
+            openVehicleEditor(null);
+            if (vehEditVin) vehEditVin.value = res.vin;
+          }
+        }
+      }
+    } catch (err) {
+      alert('Unable to read VIN from vehicle bus. Verify connection and ignition ON: ' + err);
+    }
+  }
+
+  async function openVehicleHistory(vehicleId) {
+    if (!vehicleHistoryModal) return;
+    viewingVehicleId = vehicleId;
+    const veh = currentGarage && currentGarage.vehicles.find(v => v.id === vehicleId);
+    if (!veh) return;
+
+    if (histModalTitle) histModalTitle.innerText = `LOGBOOK & HISTORY: ${veh.nickname}`;
+    const miStr = veh.mileage != null ? `${veh.mileage.toLocaleString()} ${veh.mileage_unit || 'km'}` : 'Mileage not set';
+    if (histModalSubtitle) histModalSubtitle.innerText = `${veh.year} ${veh.make} ${veh.model} · VIN: ${veh.vin || 'None'} · ${miStr}`;
+
+    try {
+      const history = await callBackend('get_vehicle_history', { vehicleId });
+      currentHistoryData = history || { service_logs: [], dtc_history: [], datalog_logs: [] };
+      renderHistoryItems();
+      vehicleHistoryModal.style.display = 'flex';
+    } catch (err) {
+      alert('Failed to load vehicle history: ' + err);
+    }
+  }
+
+  function renderHistoryItems() {
+    if (!currentHistoryData || !historyTimeline) return;
+
+    const sLogs = currentHistoryData.service_logs || [];
+    const dHistory = currentHistoryData.dtc_history || [];
+    const dlLogs = currentHistoryData.datalog_logs || [];
+
+    if (histCountAll) histCountAll.innerText = sLogs.length + dHistory.length + dlLogs.length;
+    if (histCountService) histCountService.innerText = sLogs.length;
+    if (histCountDtc) histCountDtc.innerText = dHistory.length;
+    if (histCountDatalog) histCountDatalog.innerText = dlLogs.length;
+
+    let items = [];
+
+    if (currentHistoryFilter === 'all' || currentHistoryFilter === 'service') {
+      sLogs.forEach(entry => {
+        items.push({
+          type: 'service',
+          category: entry.category,
+          date: entry.timestamp,
+          mileage: entry.mileage,
+          desc: entry.description,
+          result: entry.result,
+        });
+      });
+    }
+
+    if (currentHistoryFilter === 'all' || currentHistoryFilter === 'dtc') {
+      dHistory.forEach(entry => {
+        const codesStr = entry.dtcs.map(d => d.code).join(', ');
+        items.push({
+          type: 'dtc',
+          category: 'dtc_scan',
+          date: entry.timestamp,
+          mileage: entry.mileage,
+          desc: `Scanned ${entry.dtc_count} DTC fault codes: ${codesStr || 'No faults found'}`,
+          result: entry.dtc_count === 0 ? 'CLEAN' : `${entry.dtc_count} FAULTS`,
+        });
+      });
+    }
+
+    if (currentHistoryFilter === 'all' || currentHistoryFilter === 'datalog') {
+      dlLogs.forEach(entry => {
+        items.push({
+          type: 'datalog',
+          category: 'datalog',
+          date: entry.timestamp,
+          desc: `High-Speed Datalog: ${entry.sample_count} samples (${entry.duration_seconds.toFixed(1)}s) exported to ${entry.filename}`,
+          result: `${(entry.file_size_bytes / 1024).toFixed(1)} KB`,
+        });
+      });
+    }
+
+    items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    if (items.length === 0) {
+      historyTimeline.innerHTML = `
+        <div class="history-empty-state">
+          No records logged under this vehicle profile yet.<br>
+          Any battery registrations, CBS resets, actuator tests, DTC scans, and datalog recordings will automatically appear here.
+        </div>
+      `;
+      return;
+    }
+
+    historyTimeline.innerHTML = items.map(item => {
+      const timeStr = item.date ? item.date.replace('T', ' ').substring(0, 19) : 'Recorded';
+      const miBadge = item.mileage ? ` · ${item.mileage.toLocaleString()} mi/km` : '';
+      return `
+        <div class="history-item-row">
+          <div class="history-item-left">
+            <div class="history-item-top">
+              <span class="hist-badge ${item.category}">${item.category.replace('_', ' ')}</span>
+              <span class="hist-time">${timeStr}${miBadge}</span>
+            </div>
+            <span class="hist-desc">${item.desc}</span>
+          </div>
+          <span class="hist-result">${item.result}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Wire Garage Event Listeners
+  if (btnDetectVin) {
+    btnDetectVin.addEventListener('click', detectVinFromCar);
+  }
+  if (btnAddVehicle) {
+    btnAddVehicle.addEventListener('click', () => openVehicleEditor(null));
+  }
+  if (btnEditActiveVehicle) {
+    btnEditActiveVehicle.addEventListener('click', () => {
+      if (currentGarage) openVehicleEditor(currentGarage.active_vehicle_id);
+    });
+  }
+  if (btnViewActiveHistory) {
+    btnViewActiveHistory.addEventListener('click', () => {
+      if (currentGarage) openVehicleHistory(currentGarage.active_vehicle_id);
+    });
+  }
+
+  if (btnCancelVehEditor) {
+    btnCancelVehEditor.addEventListener('click', () => {
+      if (vehicleEditorModal) vehicleEditorModal.style.display = 'none';
+    });
+  }
+  if (btnCancelVehEditorX) {
+    btnCancelVehEditorX.addEventListener('click', () => {
+      if (vehicleEditorModal) vehicleEditorModal.style.display = 'none';
+    });
+  }
+
+  if (vehEditInterface) {
+    vehEditInterface.addEventListener('change', updateInterfaceFields);
+  }
+  if (vehEditMake) {
+    vehEditMake.addEventListener('input', evaluateFormCompatibility);
+  }
+  if (vehEditModel) {
+    vehEditModel.addEventListener('input', evaluateFormCompatibility);
+  }
+  if (vehEditYear) {
+    vehEditYear.addEventListener('input', evaluateFormCompatibility);
+  }
+
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+  });
+
+  if (btnAutoQueryVin) {
+    btnAutoQueryVin.addEventListener('click', async () => {
+      try {
+        const res = await callBackend('detect_vehicle_vin');
+        if (res && res.vin) {
+          if (vehEditVin) vehEditVin.value = res.vin;
+          alert('Successfully read VIN from vehicle bus: ' + res.vin);
+        }
       } catch (err) {
-        alert('Failed to switch profile: ' + err);
+        alert('Could not read VIN from bus: ' + err);
       }
     });
+  }
+
+  if (vehicleEditForm) {
+    vehicleEditForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveVehicleFromForm(true);
+    });
+  }
+  if (btnSaveVehProfileOnly) {
+    btnSaveVehProfileOnly.addEventListener('click', () => {
+      saveVehicleFromForm(false);
+    });
+  }
+
+  if (btnCloseHistoryModal) {
+    btnCloseHistoryModal.addEventListener('click', () => {
+      if (vehicleHistoryModal) vehicleHistoryModal.style.display = 'none';
+    });
+  }
+  if (btnCloseHistoryModalX) {
+    btnCloseHistoryModalX.addEventListener('click', () => {
+      if (vehicleHistoryModal) vehicleHistoryModal.style.display = 'none';
+    });
+  }
+
+  document.querySelectorAll('.hist-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.hist-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentHistoryFilter = tab.dataset.filter || 'all';
+      renderHistoryItems();
+    });
+  });
+
+  if (toggleAddLogHeader) {
+    toggleAddLogHeader.addEventListener('click', () => {
+      if (!addLogBody) return;
+      const isOpen = addLogBody.style.display !== 'none';
+      addLogBody.style.display = isOpen ? 'none' : 'block';
+      if (addLogToggleIcon) addLogToggleIcon.innerText = isOpen ? '▼' : '▲';
+    });
+  }
+
+  if (btnSaveManualLog) {
+    btnSaveManualLog.addEventListener('click', async () => {
+      if (!viewingVehicleId) return;
+      const text = manualLogText.value.trim();
+      if (!text) {
+        alert('Please enter a description for the service record.');
+        return;
+      }
+      const category = manualLogCategory.value;
+      const mileage = parseInt(manualLogMileage.value, 10);
+      try {
+        const updatedHistory = await callBackend('add_vehicle_service_note', {
+          vehicleId: viewingVehicleId,
+          category,
+          note: text,
+          mileage: !isNaN(mileage) ? mileage : null,
+        });
+        currentHistoryData = updatedHistory;
+        manualLogText.value = '';
+        renderHistoryItems();
+        alert('Service record added to vehicle logbook!');
+      } catch (err) {
+        alert('Failed to save service note: ' + err);
+      }
+    });
+  }
+
+  window.addEventListener('click', (e) => {
+    if (e.target === vehicleEditorModal) vehicleEditorModal.style.display = 'none';
+    if (e.target === vehicleHistoryModal) vehicleHistoryModal.style.display = 'none';
   });
 
   // In-App Update Checker
@@ -1443,10 +2086,12 @@ function initApp() {
     } catch (_) {}
   }, 100);
 
-  // Initial immediate snapshot query
+  // Initial immediate snapshot and garage queries
   callBackend('get_snapshot').then(snap => {
     if (snap) renderTelemetry(snap);
   }).catch(() => {});
+
+  fetchGarage();
 }
 
 // Ensure execution when DOM is ready

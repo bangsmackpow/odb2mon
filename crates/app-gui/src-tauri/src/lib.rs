@@ -1,17 +1,57 @@
 use obd_core::{
-    check_for_updates, BatteryStatus, BluetoothConnection, CbsItemType, CbsReport,
-    DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus, DtcRecord, EnetConnection,
-    EngineDatalogFrame, MockConnection, ObdConnection, TopologyScanReport, TransmissionOilStatus,
-    UpdateInfo, VehicleManager, VehicleProfile, WaterPumpBleedStatus,
+    append_service_log, check_for_updates, current_iso_timestamp, evaluate_compatibility,
+    load_garage, load_vehicle_history, save_garage, BatteryStatus, BluetoothConnection,
+    CbsItemType, CbsReport, DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus,
+    DtcRecord, EnetConnection, EngineDatalogFrame, Garage, HardwareCompatibilityInfo,
+    MockConnection, ObdConnection, TopologyScanReport, TransmissionOilStatus, UpdateInfo,
+    VehicleHistory, VehicleManager, VehicleProfile, VehicleRecord, VehicleServiceLogEntry,
+    WaterPumpBleedStatus,
 };
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct DetectedVinResult {
+    pub vin: String,
+    pub matched_vehicle_id: Option<String>,
+    pub message: String,
+}
+
 pub struct AppState {
     manager: Arc<Mutex<VehicleManager>>,
     active_profile: Arc<Mutex<VehicleProfile>>,
+    garage: Arc<Mutex<Garage>>,
+}
+
+fn create_connection_for_vehicle(veh: &VehicleRecord) -> (VehicleProfile, Box<dyn ObdConnection>) {
+    let profile = if veh.make.to_lowercase().contains("bmw") {
+        VehicleProfile::BmwF10_535i
+    } else if veh.make.to_lowercase().contains("gmc") || veh.make.to_lowercase().contains("gm") {
+        VehicleProfile::GmcAcadia_2010
+    } else {
+        VehicleProfile::Simulator
+    };
+
+    let connection: Box<dyn ObdConnection> = match veh.interface_type.as_str() {
+        "enet" => {
+            let host = veh
+                .interface_host
+                .clone()
+                .unwrap_or_else(|| "169.254.1.1".into());
+            let port = veh.interface_port.unwrap_or(6801);
+            Box::new(EnetConnection::new(host, port, 0x0012))
+        }
+        "bluetooth" | "usb" => {
+            let port = veh.serial_port.clone().unwrap_or_else(|| "COM3".into());
+            let baud = veh.serial_baud.unwrap_or(38400);
+            Box::new(BluetoothConnection::new(port, baud))
+        }
+        _ => Box::new(MockConnection::new(profile)),
+    };
+
+    (profile, connection)
 }
 
 #[tauri::command]
@@ -20,6 +60,197 @@ async fn get_snapshot(state: State<'_, AppState>) -> Result<DashboardSnapshot, S
     let rx = mgr.subscribe();
     let snap = rx.borrow().clone();
     Ok(snap)
+}
+
+#[tauri::command]
+async fn get_garage(state: State<'_, AppState>) -> Result<Garage, String> {
+    let garage = state.garage.lock().await;
+    Ok(garage.clone())
+}
+
+#[tauri::command]
+async fn get_vehicle_compatibility(
+    make: String,
+    model: String,
+    year: u16,
+    interface_type: String,
+) -> Result<HardwareCompatibilityInfo, String> {
+    Ok(evaluate_compatibility(&make, &model, year, &interface_type))
+}
+
+#[tauri::command]
+async fn get_vehicle_history(vehicle_id: String) -> Result<VehicleHistory, String> {
+    Ok(load_vehicle_history(&vehicle_id))
+}
+
+#[tauri::command]
+async fn add_vehicle_service_note(
+    vehicle_id: String,
+    category: String,
+    note: String,
+    mileage: Option<u32>,
+) -> Result<VehicleHistory, String> {
+    append_service_log(
+        &vehicle_id,
+        VehicleServiceLogEntry {
+            timestamp: current_iso_timestamp(),
+            mileage,
+            category,
+            description: note,
+            result: "Manual Log".into(),
+        },
+    )
+    .map_err(|e| format!("Failed to record service note: {e}"))?;
+
+    Ok(load_vehicle_history(&vehicle_id))
+}
+
+#[tauri::command]
+async fn set_active_vehicle(
+    vehicle_id: String,
+    state: State<'_, AppState>,
+) -> Result<Garage, String> {
+    let mut garage_guard = state.garage.lock().await;
+    let found = garage_guard
+        .vehicles
+        .iter()
+        .find(|v| v.id == vehicle_id)
+        .cloned();
+    let Some(target_veh) = found else {
+        return Err(format!("Vehicle not found with ID: {vehicle_id}"));
+    };
+
+    garage_guard.active_vehicle_id = vehicle_id.clone();
+    let _ = save_garage(&garage_guard);
+
+    let (profile, connection) = create_connection_for_vehicle(&target_veh);
+    let (new_manager, _rx) = VehicleManager::new_with_vehicle(connection, vehicle_id.clone());
+    new_manager.spawn_polling_loop(Duration::from_millis(100));
+
+    let mut profile_guard = state.active_profile.lock().await;
+    *profile_guard = profile;
+
+    let mut mgr_guard = state.manager.lock().await;
+    *mgr_guard = new_manager;
+
+    Ok(garage_guard.clone())
+}
+
+#[tauri::command]
+async fn save_vehicle_profile(
+    mut vehicle: VehicleRecord,
+    set_as_active: bool,
+    state: State<'_, AppState>,
+) -> Result<Garage, String> {
+    let mut garage_guard = state.garage.lock().await;
+    if vehicle.id.trim().is_empty() {
+        let ts = chrono::Utc::now().timestamp_millis();
+        vehicle.id = format!("veh_{ts}");
+    }
+    if vehicle.created_at.trim().is_empty() {
+        vehicle.created_at = current_iso_timestamp();
+    }
+
+    if let Some(pos) = garage_guard
+        .vehicles
+        .iter()
+        .position(|v| v.id == vehicle.id)
+    {
+        garage_guard.vehicles[pos] = vehicle.clone();
+    } else {
+        garage_guard.vehicles.push(vehicle.clone());
+    }
+
+    if set_as_active {
+        garage_guard.active_vehicle_id = vehicle.id.clone();
+    }
+
+    save_garage(&garage_guard).map_err(|e| format!("Failed to save garage: {e}"))?;
+
+    if set_as_active || garage_guard.active_vehicle_id == vehicle.id {
+        let (profile, connection) = create_connection_for_vehicle(&vehicle);
+        let (new_manager, _rx) = VehicleManager::new_with_vehicle(connection, vehicle.id.clone());
+        new_manager.spawn_polling_loop(Duration::from_millis(100));
+
+        let mut profile_guard = state.active_profile.lock().await;
+        *profile_guard = profile;
+
+        let mut mgr_guard = state.manager.lock().await;
+        *mgr_guard = new_manager;
+    }
+
+    Ok(garage_guard.clone())
+}
+
+#[tauri::command]
+async fn delete_vehicle_profile(
+    vehicle_id: String,
+    state: State<'_, AppState>,
+) -> Result<Garage, String> {
+    let mut garage_guard = state.garage.lock().await;
+    garage_guard.vehicles.retain(|v| v.id != vehicle_id);
+    if garage_guard.vehicles.is_empty() {
+        let default_garage = Garage::default();
+        *garage_guard = default_garage;
+    } else if garage_guard.active_vehicle_id == vehicle_id {
+        garage_guard.active_vehicle_id = garage_guard.vehicles[0].id.clone();
+    }
+
+    save_garage(&garage_guard).map_err(|e| format!("Failed to save garage: {e}"))?;
+
+    let active_id = garage_guard.active_vehicle_id.clone();
+    if let Some(target_veh) = garage_guard
+        .vehicles
+        .iter()
+        .find(|v| v.id == active_id)
+        .cloned()
+    {
+        let (profile, connection) = create_connection_for_vehicle(&target_veh);
+        let (new_manager, _rx) = VehicleManager::new_with_vehicle(connection, active_id);
+        new_manager.spawn_polling_loop(Duration::from_millis(100));
+
+        let mut profile_guard = state.active_profile.lock().await;
+        *profile_guard = profile;
+
+        let mut mgr_guard = state.manager.lock().await;
+        *mgr_guard = new_manager;
+    }
+
+    Ok(garage_guard.clone())
+}
+
+#[tauri::command]
+async fn detect_vehicle_vin(state: State<'_, AppState>) -> Result<DetectedVinResult, String> {
+    let mgr = state.manager.lock().await;
+    let vin = mgr
+        .read_vin()
+        .await
+        .map_err(|e| format!("Failed to read VIN: {e}"))?;
+    drop(mgr);
+
+    let garage = state.garage.lock().await;
+    let matched_id = garage
+        .vehicles
+        .iter()
+        .find(|v| {
+            v.vin
+                .as_ref()
+                .map(|v_str| v_str.trim().eq_ignore_ascii_case(vin.trim()))
+                .unwrap_or(false)
+        })
+        .map(|v| v.id.clone());
+
+    let message = if let Some(ref mid) = matched_id {
+        format!("VIN {vin} matched existing vehicle record ({mid})")
+    } else {
+        format!("VIN {vin} detected from vehicle bus")
+    };
+
+    Ok(DetectedVinResult {
+        vin,
+        matched_vehicle_id: matched_id,
+        message,
+    })
 }
 
 #[tauri::command]
@@ -80,6 +311,9 @@ async fn read_fault_codes(state: State<'_, AppState>) -> Result<Vec<DtcRecord>, 
     let mgr = state.manager.lock().await;
     let rx = mgr.subscribe();
     let snap = rx.borrow().clone();
+    if !snap.active_dtcs.is_empty() {
+        mgr.record_dtc_scan(snap.active_dtcs.clone()).await;
+    }
     Ok(snap.active_dtcs)
 }
 
@@ -228,14 +462,49 @@ async fn get_datalog_status(state: State<'_, AppState>) -> Result<DataloggerStat
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Default initial connection to realistic simulator
-    let initial_conn = Box::new(MockConnection::new(VehicleProfile::BmwF10_535i));
-    let (initial_manager, _event_rx) = VehicleManager::new(initial_conn);
+    let initial_garage = load_garage();
+    let active_id = initial_garage.active_vehicle_id.clone();
+    let initial_veh = initial_garage
+        .vehicles
+        .iter()
+        .find(|v| v.id == active_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            initial_garage
+                .vehicles
+                .first()
+                .cloned()
+                .unwrap_or_else(|| VehicleRecord {
+                    id: "veh_bmw_f10_535i".into(),
+                    nickname: "2011 BMW 535i xDrive".into(),
+                    make: "BMW".into(),
+                    model: "535i xDrive (F10)".into(),
+                    year: 2011,
+                    vin: Some("WBAFR7C58BC123456".into()),
+                    mileage: Some(142500),
+                    mileage_unit: "km".into(),
+                    engine: Some("3.0L Turbo Inline-6 (N55B30M0)".into()),
+                    interface_type: "enet".into(),
+                    interface_host: Some("169.254.1.1".into()),
+                    interface_port: Some(6801),
+                    serial_port: None,
+                    serial_baud: None,
+                    notes: None,
+                    created_at: current_iso_timestamp(),
+                    last_connected_at: None,
+                    active_dtc_count: 2,
+                })
+        });
+
+    let (initial_profile, initial_conn) = create_connection_for_vehicle(&initial_veh);
+    let (initial_manager, _event_rx) =
+        VehicleManager::new_with_vehicle(initial_conn, initial_veh.id.clone());
     initial_manager.spawn_polling_loop(Duration::from_millis(100));
 
     let app_state = AppState {
         manager: Arc::new(Mutex::new(initial_manager)),
-        active_profile: Arc::new(Mutex::new(VehicleProfile::BmwF10_535i)),
+        active_profile: Arc::new(Mutex::new(initial_profile)),
+        garage: Arc::new(Mutex::new(initial_garage)),
     };
 
     tauri::Builder::default()
@@ -261,7 +530,15 @@ pub fn run() {
             get_engine_datalog,
             start_datalog_recording,
             stop_datalog_recording,
-            get_datalog_status
+            get_datalog_status,
+            get_garage,
+            get_vehicle_compatibility,
+            get_vehicle_history,
+            add_vehicle_service_note,
+            set_active_vehicle,
+            save_vehicle_profile,
+            delete_vehicle_profile,
+            detect_vehicle_vin
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {
