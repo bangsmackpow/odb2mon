@@ -210,6 +210,7 @@ pub fn evaluate_compatibility(
                         "Radiator Cooling Fan Step Override (0x0215)".into(),
                         "Muffler Exhaust Flap Valve Actuator (0x0218)".into(),
                         "High-Speed N55 Multi-Channel Datalogging & Oscilloscope Chart".into(),
+                        "BMW FDL Vehicle Coding & Customizations (Gong, Lights, Mirrors, Start/Stop)".into(),
                     ],
                     unsupported_features: vec![],
                     cable_notes: "Connect using a standard RJ45-to-OBD2 ENET cable. Configure computer network adapter to DHCP (Autoconfig 169.254.x.x) or static IP 169.254.1.2 / 255.255.0.0. ZGW responds at 169.254.1.1:6801.".into(),
@@ -408,6 +409,68 @@ pub fn append_datalog_entry(
         history.datalog_logs.truncate(100);
     }
     save_vehicle_history(vehicle_id, &history)
+}
+
+/// Saves a coding backup record to persistent storage under the vehicle's directory.
+pub fn save_coding_backup(
+    vehicle_id: &str,
+    record: &crate::profile::CodingBackupRecord,
+) -> Result<String, ObdError> {
+    let dir = get_garage_directory()
+        .join("vehicles")
+        .join(vehicle_id)
+        .join("coding_backups");
+    fs::create_dir_all(&dir)?;
+
+    let file_path = dir.join(format!("{}.json", record.id));
+    let json =
+        serde_json::to_string_pretty(record).map_err(|e| ObdError::ParseError(e.to_string()))?;
+    fs::write(&file_path, json)?;
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Retrieves all saved coding backup records for a vehicle, sorted newest first.
+pub fn list_coding_backups(vehicle_id: &str) -> Vec<crate::profile::CodingBackupRecord> {
+    let dir = get_garage_directory()
+        .join("vehicles")
+        .join(vehicle_id)
+        .join("coding_backups");
+    if !dir.exists() {
+        return Vec::new();
+    }
+
+    let mut backups = Vec::new();
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                if let Ok(data) = fs::read_to_string(&path) {
+                    if let Ok(record) =
+                        serde_json::from_str::<crate::profile::CodingBackupRecord>(&data)
+                    {
+                        backups.push(record);
+                    }
+                }
+            }
+        }
+    }
+    backups.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    backups
+}
+
+/// Loads a specific coding backup record by ID.
+pub fn load_coding_backup(
+    vehicle_id: &str,
+    backup_id: &str,
+) -> Result<crate::profile::CodingBackupRecord, ObdError> {
+    let dir = get_garage_directory()
+        .join("vehicles")
+        .join(vehicle_id)
+        .join("coding_backups");
+    let file_path = dir.join(format!("{backup_id}.json"));
+    let data = fs::read_to_string(&file_path)
+        .map_err(|e| ObdError::ConnectionFailed(format!("Backup file not found: {e}")))?;
+    serde_json::from_str(&data).map_err(|e| ObdError::ParseError(e.to_string()))
 }
 
 #[cfg(test)]

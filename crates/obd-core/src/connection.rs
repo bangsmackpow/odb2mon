@@ -1,8 +1,8 @@
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EngineDatalogFrame, ParameterType,
-    ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
-    WaterPumpBleedStatus,
+    BatteryStatus, CbsItemType, CbsReport, CodingParameterDefinition, DtcRecord,
+    EngineDatalogFrame, ParameterType, ParameterValue, TopologyScanReport, TransmissionOilStatus,
+    VehicleProfile, WaterPumpBleedStatus,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -136,6 +136,31 @@ pub trait ObdConnection: Send + Sync {
     async fn read_vin(&mut self) -> Result<String, ObdError> {
         Err(ObdError::Unsupported(
             "VIN readout is not supported on this vehicle profile".into(),
+        ))
+    }
+
+    /// Queries available vehicle FDL coding parameters and their active values.
+    async fn get_coding_parameters(&mut self) -> Result<Vec<CodingParameterDefinition>, ObdError> {
+        Err(ObdError::Unsupported(
+            "Vehicle coding is only supported on BMW F/G-Series via ENET".into(),
+        ))
+    }
+
+    /// Writes an FDL coding parameter value to the target ECU.
+    async fn write_coding_parameter(
+        &mut self,
+        _param_id: &str,
+        _raw_value: u8,
+    ) -> Result<String, ObdError> {
+        Err(ObdError::Unsupported(
+            "Vehicle coding is only supported on BMW F/G-Series via ENET".into(),
+        ))
+    }
+
+    /// Restores a coding parameter from a previously saved backup record.
+    async fn restore_coding_backup(&mut self, _backup_id: &str) -> Result<String, ObdError> {
+        Err(ObdError::Unsupported(
+            "Vehicle coding is only supported on BMW F/G-Series via ENET".into(),
         ))
     }
 

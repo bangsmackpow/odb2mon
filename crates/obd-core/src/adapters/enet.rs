@@ -1,9 +1,9 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EcuHealth, EcuNode, EngineDatalogFrame,
-    ParameterType, ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
-    WaterPumpBleedStatus,
+    BatteryStatus, CbsItemType, CbsReport, CodingParameterDefinition, DtcRecord, EcuHealth,
+    EcuNode, EngineDatalogFrame, ParameterType, ParameterValue, TopologyScanReport,
+    TransmissionOilStatus, VehicleProfile, WaterPumpBleedStatus,
 };
 use crate::protocols::doip;
 use crate::protocols::uds;
@@ -456,6 +456,145 @@ impl ObdConnection for EnetConnection {
         let req = uds::build_read_did_request(uds::DID_VIN);
         let resp = self.send_uds_request(&req).await?;
         uds::parse_vin_response(&resp)
+    }
+
+    async fn get_coding_parameters(&mut self) -> Result<Vec<CodingParameterDefinition>, ObdError> {
+        let mut params = crate::profile::get_default_bmw_f10_coding_parameters();
+        for param in &mut params {
+            let req = uds::build_read_did_request(param.did);
+            if let Ok(resp) = self.send_uds_request_to_ecu(param.ecu_address, &req).await {
+                if resp.len() > 3 + param.byte_offset && resp[0] == 0x62 {
+                    let byte = resp[3 + param.byte_offset];
+                    let val = byte & param.bit_mask;
+                    param.active_raw_value = val;
+                    if let Some(opt) = param.options.iter().find(|o| o.raw_value == val) {
+                        param.active_value = opt.label.clone();
+                    }
+                }
+            }
+        }
+        Ok(params)
+    }
+
+    async fn write_coding_parameter(
+        &mut self,
+        param_id: &str,
+        raw_value: u8,
+    ) -> Result<String, ObdError> {
+        let mut params = crate::profile::get_default_bmw_f10_coding_parameters();
+        let Some(param) = params.iter_mut().find(|p| p.id == param_id) else {
+            return Err(ObdError::Unsupported(format!(
+                "Unknown coding parameter ID: {param_id}"
+            )));
+        };
+
+        // Safety Voltage Check via IBS DID 0xD010
+        if let Ok(battery) = self.read_battery_status().await {
+            if battery.voltage < 12.0 && battery.voltage > 0.0 {
+                return Err(ObdError::Protocol(format!(
+                    "Battery terminal voltage ({:.1}V) is below safe coding threshold (12.0V). Connect battery charger/tender before programming.",
+                    battery.voltage
+                )));
+            }
+        }
+
+        // 1. Read current DID payload from ECU
+        let read_req = uds::build_read_did_request(param.did);
+        let resp = self
+            .send_uds_request_to_ecu(param.ecu_address, &read_req)
+            .await?;
+        if resp.len() <= 3 + param.byte_offset || resp[0] != 0x62 {
+            return Err(ObdError::Protocol(format!(
+                "Failed to read current configuration payload from ECU {:#04X}",
+                param.ecu_address
+            )));
+        }
+
+        let mut current_data = resp[3..].to_vec();
+        let prev_byte = current_data[param.byte_offset];
+        let prev_raw = prev_byte & param.bit_mask;
+        let prev_label = param
+            .options
+            .iter()
+            .find(|o| o.raw_value == prev_raw)
+            .map(|o| o.label.clone())
+            .unwrap_or_else(|| format!("{:#04X}", prev_raw));
+
+        let new_label = param
+            .options
+            .iter()
+            .find(|o| o.raw_value == raw_value)
+            .map(|o| o.label.clone())
+            .unwrap_or_else(|| format!("{:#04X}", raw_value));
+
+        // 2. Persist pre-coding backup to disk
+        let garage = crate::garage::load_garage();
+        let backup_record = crate::profile::CodingBackupRecord {
+            id: format!(
+                "backup_{}_{}_{}",
+                param.id,
+                param.target_ecu.to_lowercase(),
+                chrono::Utc::now().timestamp_millis()
+            ),
+            timestamp: crate::garage::current_iso_timestamp(),
+            vehicle_id: garage.active_vehicle_id.clone(),
+            param_id: param.id.clone(),
+            param_name: param.name.clone(),
+            ecu_name: param.target_ecu.clone(),
+            ecu_address: param.ecu_address,
+            previous_value_label: prev_label,
+            previous_raw_value: prev_raw,
+            new_value_label: new_label.clone(),
+            new_raw_value: raw_value,
+            payload_hex: current_data
+                .iter()
+                .map(|b| format!("{b:02X}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        };
+        let _ = crate::garage::save_coding_backup(&garage.active_vehicle_id, &backup_record);
+
+        // 3. Modify byte using bitmask
+        current_data[param.byte_offset] =
+            (prev_byte & !param.bit_mask) | (raw_value & param.bit_mask);
+
+        // 4. Elevate session on target ECU to Extended Diagnostic Session (0x10 0x03)
+        let session_req = uds::build_session_control_request(0x03);
+        let _ = self
+            .send_uds_request_to_ecu(param.ecu_address, &session_req)
+            .await;
+
+        // 5. Write Data By Identifier (Service 0x2E)
+        let write_req = uds::build_write_did_request(param.did, &current_data);
+        let write_resp = self
+            .send_uds_request_to_ecu(param.ecu_address, &write_req)
+            .await?;
+        uds::parse_write_did_response(param.did, &write_resp)?;
+
+        // 6. ECU Soft Reset (Service 0x11 0x03) to reload parameters
+        let reset_req = uds::build_ecu_reset_request(0x03);
+        let _ = self
+            .send_uds_request_to_ecu(param.ecu_address, &reset_req)
+            .await;
+
+        Ok(format!(
+            "Successfully coded '{}' to '{}' on {} ({:#04X}). ECU soft reset performed.",
+            param.name, new_label, param.target_ecu, param.ecu_address
+        ))
+    }
+
+    async fn restore_coding_backup(&mut self, backup_id: &str) -> Result<String, ObdError> {
+        let garage = crate::garage::load_garage();
+        let backup = crate::garage::load_coding_backup(&garage.active_vehicle_id, backup_id)?;
+
+        // Write back previous raw value
+        self.write_coding_parameter(&backup.param_id, backup.previous_raw_value)
+            .await?;
+
+        Ok(format!(
+            "Successfully restored '{}' to previous state '{}' from backup.",
+            backup.param_name, backup.previous_value_label
+        ))
     }
 
     fn profile(&self) -> VehicleProfile {

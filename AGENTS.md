@@ -90,7 +90,7 @@ cargo fmt --all
 ```bash
 cargo test --workspace
 ```
-*Expected result: 47+ tests passing across `obd-core`, `simulator_test.rs`, and binary crates.*
+*Expected result: 49+ tests passing across `obd-core`, `simulator_test.rs`, and binary crates.*
 
 ### 3. Clippy & Linter Verification
 ```bash
@@ -150,6 +150,11 @@ Binaries will be placed in `target/release/obd2mon-app.exe` and `target/release/
   - `0x0215`: Radiator Electric Cooling Fan Step Test (15%, 50%, 90%, Stop).
   - `0x0218`: Muffler Tailpipe Exhaust Flap Actuator (Open / Closed).
 - **Fault Codes:** Service `0x19 0x02 0xFF` (Read DTCs by Status Mask); Service `0x04 FF FF FF` (Clear All DTCs).
+- **Vehicle Coding (FDL Customization):**
+  - UDS Services: `0x22` (Read DID), `0x2E` (Write DID), `0x11 0x03` (ECU Soft Reset), `0x10 0x03` (Extended Session).
+  - Target ECUs: `KOMBI (0x0060)`, `CAS (0x0040)`, `FRM (0x0072)`, `HU_NBT (0x0063)`.
+  - Voltage Interlock: Requires voltage >= 12.0V prior to write dispatch to prevent EEPROM corruption.
+  - Automatic Rollback Backups: Pre-coding state archived under `coding_backups/`.
 
 ### SAE J1979 / ELM327 Standard
 - **Transport:** Bluetooth RFCOMM or Serial COM port (e.g. `COM3`, default 38400 baud).
@@ -170,9 +175,11 @@ User configuration and per-vehicle logbooks are persisted under `%APPDATA%\obd2m
   - Stores all saved vehicle records (Make, Model, Year, VIN, Mileage, Interface, Notes).
   - Tracks `active_vehicle_id`.
 - **Per-Vehicle Logbook:** `%APPDATA%\obd2mon\vehicles\<vehicle_id>\history.json`
-  - `service_logs`: Automated timestamps for battery registrations, CBS resets, bleed routines, transmission fills, DTC clears, and manual notes.
+  - `service_logs`: Automated timestamps for battery registrations, CBS resets, bleed routines, transmission fills, DTC clears, coding changes, and manual notes.
   - `dtc_history`: Historical DTC scans and fault codes.
   - `datalog_logs`: CSV recording archives (duration, sample counts, disk paths).
+- **Pre-Coding Backups:** `%APPDATA%\obd2mon\vehicles\<vehicle_id>\coding_backups\`
+  - Individual timestamped JSON snapshots recording previous values, byte offsets, and hex payloads for instant one-click rollback.
 - **Compatibility Engine:** Evaluates hardware requirements dynamically without network access (`evaluate_compatibility()`).
 - **Legacy Fallback:** If `%APPDATA%\odb2mon` exists from older test builds, `get_garage_directory()` transparently migrates or reads from it.
 

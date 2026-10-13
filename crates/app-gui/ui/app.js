@@ -134,6 +134,9 @@ function initApp() {
       if (targetPage === 'profiles') {
         fetchGarage();
       }
+      if (targetPage === 'coding') {
+        fetchCodingParameters();
+      }
       if (targetPage === 'datalog') {
         startDatalogStream();
       } else {
@@ -1056,6 +1059,9 @@ function initApp() {
       // Voltage
       if (valBatVoltage) {
         valBatVoltage.innerText = `${bat.voltage.toFixed(2)} V`;
+      }
+      if (typeof bat.voltage === 'number') {
+        updateCodingVoltage(bat.voltage);
       }
 
       // Net Current
@@ -2068,6 +2074,374 @@ function initApp() {
     });
   }
 
+  // ====================================================
+  // 6. VEHICLE CODING & CUSTOMIZATION CONTROLLER
+  // ====================================================
+  const codingVoltageBadge = document.getElementById('codingVoltageBadge');
+  const btnRefreshCoding = document.getElementById('btnRefreshCoding');
+  const btnOpenCodingBackups = document.getElementById('btnOpenCodingBackups');
+  const codingBackupCount = document.getElementById('codingBackupCount');
+  const codingCardsGrid = document.getElementById('codingCardsGrid');
+  const countCodingAll = document.getElementById('countCodingAll');
+  const codingFilterBtns = document.querySelectorAll('.coding-filter-btn');
+
+  // Confirmation Modal Elements
+  const codingConfirmModal = document.getElementById('codingConfirmModal');
+  const btnCloseCodingConfirmX = document.getElementById('btnCloseCodingConfirmX');
+  const btnCancelCodingConfirm = document.getElementById('btnCancelCodingConfirm');
+  const btnExecuteCodingWrite = document.getElementById('btnExecuteCodingWrite');
+  const confirmParamName = document.getElementById('confirmParamName');
+  const confirmTargetEcu = document.getElementById('confirmTargetEcu');
+  const confirmCurrentVal = document.getElementById('confirmCurrentVal');
+  const confirmNewVal = document.getElementById('confirmNewVal');
+
+  // Backups Modal Elements
+  const codingBackupsModal = document.getElementById('codingBackupsModal');
+  const btnCloseCodingBackupsX = document.getElementById('btnCloseCodingBackupsX');
+  const btnCloseCodingBackups = document.getElementById('btnCloseCodingBackups');
+  const codingBackupsList = document.getElementById('codingBackupsList');
+
+  let codingParameters = [];
+  let codingBackups = [];
+  let activeCodingCategory = 'all';
+  let pendingCodingWrite = null;
+
+  function updateCodingVoltage(volts) {
+    if (!codingVoltageBadge) return;
+    const v = Number(volts) || 0;
+    if (v >= 12.0) {
+      codingVoltageBadge.className = 'coding-voltage-pill';
+      codingVoltageBadge.innerText = `⚡ ${v.toFixed(1)}V Battery Safe`;
+    } else {
+      codingVoltageBadge.className = 'coding-voltage-pill warn';
+      codingVoltageBadge.innerText = `⚠️ ${v.toFixed(1)}V Low Battery Voltage`;
+    }
+  }
+
+  async function fetchCodingParameters() {
+    if (!codingCardsGrid) return;
+    try {
+      // Query battery status in background to keep voltage pill accurate
+      callBackend('get_battery_status').then(bat => {
+        if (bat && bat.supported && typeof bat.voltage === 'number') {
+          updateCodingVoltage(bat.voltage);
+        }
+      }).catch(() => {});
+
+      // Refresh pre-coding backup count
+      fetchCodingBackups(false);
+
+      const params = await callBackend('get_coding_parameters');
+      if (Array.isArray(params)) {
+        codingParameters = params;
+        renderCodingCards();
+      }
+    } catch (err) {
+      console.error('Failed to load coding parameters:', err);
+      if (codingCardsGrid) {
+        codingCardsGrid.innerHTML = `
+          <div class="cbs-card" style="grid-column: 1 / -1; text-align: center; color: var(--accent-red); padding: 30px;">
+            ⚠️ Coding Unavailable: ${err}
+          </div>
+        `;
+      }
+    }
+  }
+
+  function renderCodingCards() {
+    if (!codingCardsGrid) return;
+
+    if (countCodingAll) {
+      countCodingAll.innerText = codingParameters.length;
+    }
+
+    const filtered = activeCodingCategory === 'all'
+      ? codingParameters
+      : codingParameters.filter(p => p.category === activeCodingCategory);
+
+    if (filtered.length === 0) {
+      codingCardsGrid.innerHTML = `
+        <div class="cbs-card" style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 40px;">
+          No coding parameters found for the selected category.
+        </div>
+      `;
+      return;
+    }
+
+    codingCardsGrid.innerHTML = filtered.map(param => {
+      const optionsHtml = param.options.map(opt => {
+        const isSelected = opt.raw_value === param.active_raw_value;
+        const oemTag = opt.is_factory_default ? ' [OEM]' : '';
+        return `<option value="${opt.raw_value}" ${isSelected ? 'selected' : ''}>${opt.label}${oemTag}</option>`;
+      }).join('');
+
+      const hexAddr = '0x' + param.ecu_address.toString(16).toUpperCase().padStart(4, '0');
+
+      return `
+        <div class="coding-card" id="card-${param.id}">
+          <div class="coding-card-header">
+            <div class="coding-card-title-group">
+              <span class="coding-cat-pill">${param.category}</span>
+              <span class="coding-param-title">${param.name}</span>
+            </div>
+            <span class="coding-ecu-badge">${param.target_ecu} (${hexAddr})</span>
+          </div>
+
+          <div class="coding-desc">${param.description}</div>
+
+          <div class="coding-active-row">
+            <span>ACTIVE VALUE:</span>
+            <strong class="coding-active-pill" id="active-val-${param.id}">${param.active_value}</strong>
+          </div>
+
+          <div class="coding-select-group">
+            <label class="coding-select-label">TARGET CONFIGURATION</label>
+            <select class="coding-select" id="select-${param.id}" data-param-id="${param.id}">
+              ${optionsHtml}
+            </select>
+          </div>
+
+          <div class="coding-card-footer">
+            <span class="coding-card-status" id="status-${param.id}">Ready</span>
+            <button class="btn btn-primary btn-sm btn-write-param" data-param-id="${param.id}">WRITE CODING</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listeners to "WRITE CODING" buttons
+    document.querySelectorAll('.btn-write-param').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const paramId = btn.dataset.paramId;
+        const param = codingParameters.find(p => p.id === paramId);
+        if (!param) return;
+
+        const selectElem = document.getElementById(`select-${param.id}`);
+        if (!selectElem) return;
+
+        const rawVal = parseInt(selectElem.value, 10);
+        const selectedOpt = param.options.find(o => o.raw_value === rawVal);
+        if (!selectedOpt) return;
+
+        openCodingConfirmModal(param, selectedOpt);
+      });
+    });
+  }
+
+  function openCodingConfirmModal(param, selectedOpt) {
+    pendingCodingWrite = {
+      param,
+      option: selectedOpt,
+      cardId: `card-${param.id}`,
+      statusId: `status-${param.id}`,
+      activeValId: `active-val-${param.id}`,
+    };
+
+    const hexAddr = '0x' + param.ecu_address.toString(16).toUpperCase().padStart(4, '0');
+    if (confirmParamName) confirmParamName.innerText = param.name;
+    if (confirmTargetEcu) confirmTargetEcu.innerText = `${param.target_ecu} (${hexAddr})`;
+    if (confirmCurrentVal) confirmCurrentVal.innerText = param.active_value;
+    if (confirmNewVal) confirmNewVal.innerText = selectedOpt.label;
+
+    if (codingConfirmModal) codingConfirmModal.style.display = 'flex';
+  }
+
+  async function executePendingCodingWrite() {
+    if (!pendingCodingWrite) return;
+    const { param, option, statusId, activeValId } = pendingCodingWrite;
+
+    if (btnExecuteCodingWrite) {
+      btnExecuteCodingWrite.disabled = true;
+      btnExecuteCodingWrite.innerText = '⚡ WRITING & RESETTING ECU...';
+    }
+
+    try {
+      const msg = await callBackend('write_coding_parameter', {
+        paramId: param.id,
+        rawValue: option.raw_value,
+      });
+
+      if (codingConfirmModal) codingConfirmModal.style.display = 'none';
+
+      // Update card UI immediately
+      const statusElem = document.getElementById(statusId);
+      if (statusElem) {
+        statusElem.innerText = '✓ Applied & Restarted';
+        statusElem.className = 'coding-card-status success';
+      }
+      const activeElem = document.getElementById(activeValId);
+      if (activeElem) {
+        activeElem.innerText = option.label;
+      }
+
+      // Refresh parameter list and backups in background
+      await fetchCodingParameters();
+      await fetchCodingBackups(false);
+
+      alert(msg || `Successfully coded ${param.name} to ${option.label}!`);
+    } catch (err) {
+      if (codingConfirmModal) codingConfirmModal.style.display = 'none';
+
+      const statusElem = document.getElementById(statusId);
+      if (statusElem) {
+        statusElem.innerText = '✕ Write failed';
+        statusElem.className = 'coding-card-status error';
+      }
+
+      alert(`Failed to write coding: ${err}`);
+    } finally {
+      if (btnExecuteCodingWrite) {
+        btnExecuteCodingWrite.disabled = false;
+        btnExecuteCodingWrite.innerText = '⚡ WRITE & APPLY CODING';
+      }
+      pendingCodingWrite = null;
+    }
+  }
+
+  async function fetchCodingBackups(openModal = false) {
+    try {
+      const backups = await callBackend('get_coding_backups');
+      if (Array.isArray(backups)) {
+        codingBackups = backups;
+        if (codingBackupCount) codingBackupCount.innerText = backups.length;
+        renderCodingBackupsList();
+      }
+      if (openModal && codingBackupsModal) {
+        codingBackupsModal.style.display = 'flex';
+      }
+    } catch (err) {
+      console.error('Failed to load coding backups:', err);
+    }
+  }
+
+  function renderCodingBackupsList() {
+    if (!codingBackupsList) return;
+
+    if (codingBackups.length === 0) {
+      codingBackupsList.innerHTML = `
+        <div class="cbs-card" style="text-align: center; color: var(--text-dim); padding: 30px;">
+          No pre-coding backups found for the active vehicle profile.
+        </div>
+      `;
+      return;
+    }
+
+    codingBackupsList.innerHTML = codingBackups.map(b => {
+      const hexAddr = '0x' + b.ecu_address.toString(16).toUpperCase().padStart(4, '0');
+      const timeStr = b.timestamp.replace('T', ' ').substring(0, 19);
+
+      return `
+        <div class="backup-item-card">
+          <div class="backup-left">
+            <div class="backup-header-line">
+              <span class="backup-title">${b.param_name}</span>
+              <span class="coding-ecu-badge">${b.ecu_name} (${hexAddr})</span>
+            </div>
+            <span class="backup-val-trans">
+              Previous: <strong style="color: var(--accent-green);">${b.previous_value_label}</strong> → Written: <span style="color: var(--accent-cyan);">${b.new_value_label}</span>
+            </span>
+            <span class="backup-time">Saved: ${timeStr}</span>
+          </div>
+          <button class="btn btn-secondary btn-sm btn-restore-backup" data-backup-id="${b.id}">RESTORE</button>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click listeners to restore buttons
+    document.querySelectorAll('.btn-restore-backup').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const backupId = btn.dataset.backupId;
+        const backup = codingBackups.find(b => b.id === backupId);
+        if (!backup) return;
+
+        if (!confirm(`Restore ${backup.param_name} back to "${backup.previous_value_label}" on ${backup.ecu_name}? This will perform an ECU soft reset.`)) {
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = 'Restoring...';
+
+        try {
+          const msg = await callBackend('restore_coding_backup', { backupId });
+          alert(msg || 'Coding restored successfully!');
+          await fetchCodingParameters();
+          await fetchCodingBackups(false);
+        } catch (err) {
+          alert('Failed to restore coding: ' + err);
+        } finally {
+          btn.disabled = false;
+          btn.innerText = 'RESTORE';
+        }
+      });
+    });
+  }
+
+  // Filter Buttons
+  codingFilterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      codingFilterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCodingCategory = btn.dataset.category || 'all';
+      renderCodingCards();
+    });
+  });
+
+  // Toolbar Buttons
+  if (btnRefreshCoding) {
+    btnRefreshCoding.addEventListener('click', () => {
+      fetchCodingParameters();
+    });
+  }
+
+  if (btnOpenCodingBackups) {
+    btnOpenCodingBackups.addEventListener('click', () => {
+      fetchCodingBackups(true);
+    });
+  }
+
+  // Modal Closures
+  if (btnCloseCodingConfirmX) {
+    btnCloseCodingConfirmX.addEventListener('click', () => {
+      if (codingConfirmModal) codingConfirmModal.style.display = 'none';
+      pendingCodingWrite = null;
+    });
+  }
+
+  if (btnCancelCodingConfirm) {
+    btnCancelCodingConfirm.addEventListener('click', () => {
+      if (codingConfirmModal) codingConfirmModal.style.display = 'none';
+      pendingCodingWrite = null;
+    });
+  }
+
+  if (btnExecuteCodingWrite) {
+    btnExecuteCodingWrite.addEventListener('click', () => {
+      executePendingCodingWrite();
+    });
+  }
+
+  if (btnCloseCodingBackupsX) {
+    btnCloseCodingBackupsX.addEventListener('click', () => {
+      if (codingBackupsModal) codingBackupsModal.style.display = 'none';
+    });
+  }
+
+  if (btnCloseCodingBackups) {
+    btnCloseCodingBackups.addEventListener('click', () => {
+      if (codingBackupsModal) codingBackupsModal.style.display = 'none';
+    });
+  }
+
+  window.addEventListener('click', (e) => {
+    if (e.target === codingConfirmModal) {
+      codingConfirmModal.style.display = 'none';
+      pendingCodingWrite = null;
+    }
+    if (e.target === codingBackupsModal) {
+      codingBackupsModal.style.display = 'none';
+    }
+  });
+
   // Event Push Listener
   listenToEvent('telemetry-update', event => {
     if (event && event.payload) {
@@ -2092,6 +2466,7 @@ function initApp() {
   }).catch(() => {});
 
   fetchGarage();
+  fetchCodingBackups(false);
 }
 
 // Ensure execution when DOM is ready

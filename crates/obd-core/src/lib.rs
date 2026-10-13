@@ -15,13 +15,15 @@ pub use dtc_db::{lookup_description, lookup_known_dtc};
 pub use error::ObdError;
 pub use garage::{
     append_datalog_entry, append_dtc_history, append_service_log, current_iso_timestamp,
-    evaluate_compatibility, get_garage_directory, load_garage, load_vehicle_history, save_garage,
-    save_vehicle_history, Garage, HardwareCompatibilityInfo, VehicleDatalogLogEntry,
-    VehicleDtcHistoryEntry, VehicleHistory, VehicleRecord, VehicleServiceLogEntry,
+    evaluate_compatibility, get_garage_directory, list_coding_backups, load_coding_backup,
+    load_garage, load_vehicle_history, save_coding_backup, save_garage, save_vehicle_history,
+    Garage, HardwareCompatibilityInfo, VehicleDatalogLogEntry, VehicleDtcHistoryEntry,
+    VehicleHistory, VehicleRecord, VehicleServiceLogEntry,
 };
 pub use manager::VehicleManager;
 pub use profile::{
-    BatteryStatus, BmwEcuDefinition, BusType, CbsItem, CbsItemType, CbsReport, CbsStatus,
+    get_default_bmw_f10_coding_parameters, BatteryStatus, BmwEcuDefinition, BusType, CbsItem,
+    CbsItemType, CbsReport, CbsStatus, CodingBackupRecord, CodingOption, CodingParameterDefinition,
     DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus, DtcRecord, DtcStatus, EcuHealth,
     EcuNode, EngineDatalogFrame, ExhaustFlapStatus, ParameterType, ParameterValue,
     RadiatorFanStatus, TopologyScanReport, TransmissionOilStatus, VehicleProfile,

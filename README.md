@@ -64,13 +64,19 @@ Specifically architected for modern BMW UDS diagnostics over DoIP Ethernet (ENET
 - Multi-vehicle garage manager with persistent profile storage in `%APPDATA%\obd2mon\garage.json`.
 - **Dynamic Hardware Compatibility Intelligence Engine:** Evaluates Make, Model, Year, and Interface to recommend optimal cables (ENET, K+DCAN, ELM327), outline supported capabilities, warn about limitations, and show wiring pinouts.
 - **VIN Interrogation & Auto-Detection:** Automatically queries vehicle VIN over UDS DID `0xF190` or SAE Mode 09 PID `0x02` and matches against saved garage vehicles.
-- **Persistent Per-Vehicle Logbooks (`vehicles/<id>/history.json`):** Automatically logs all battery registrations, CBS resets, bleed cycles, transmission fills, DTC scans, datalog sessions, and manual maintenance notes.
+- **Persistent Per-Vehicle Logbooks (`vehicles/<id>/history.json`):** Automatically logs all battery registrations, CBS resets, bleed cycles, transmission fills, DTC scans, coding changes, datalog sessions, and manual maintenance notes.
 
-### 9. In-App Technical Documentation & Auto-Updater
-- 10-chapter technical reference built directly into the UI.
+### 9. Vehicle Coding & Feature Customization (FDL / UDS)
+- **12 Configurable Parameters:** Warning gong tone (Rolls-Royce, BMW i, Mini), seat belt chimes, welcome light duration, pathway lighting, comfort blinker pulses, angel eye brightness, fog lights with high beams, auto-fold mirrors on lock, auto-unlock on engine shutdown, auto start/stop memory, digital speedometer in cluster, and iDrive legal disclaimer removal.
+- **Target Modules:** Direct memory updates across KOMBI (`0x0060`), CAS (`0x0040`), FRM (`0x0072`), and HU_NBT (`0x0063`).
+- **Safety Protocol & Voltage Interlock:** Enforces IBS battery voltage > 12.0V prior to write dispatch to prevent EEPROM corruption.
+- **Automated Rollback Archive:** Generates timestamped pre-coding snapshots with one-click restore and immediate ECU soft reset (Service `0x11 0x03`).
+
+### 10. In-App Technical Documentation & Auto-Updater
+- 11-chapter technical reference built directly into the UI.
 - Integrated GitHub release updater checking `bangsmackpow/obd2mon` releases.
 
-### 10. Windows WiX Installer
+### 11. Windows WiX Installer
 - Generates an `obd2mon-installer.msi` package that installs `obd2mon-app.exe` (GUI) and `obd-cli.exe` (CLI), adds an `obd2mon` Desktop Shortcut, and registers the installation directory on the system PATH.
 
 ---
@@ -102,7 +108,7 @@ obd2mon/
 │   │   │   ├── updater.rs           # GitHub release auto-updater checker
 │   │   │   ├── protocols/
 │   │   │   │   ├── doip.rs          # ISO 13400 framing & Routing Activation
-│   │   │   │   ├── uds.rs           # ISO 14229 Services (0x10, 0x19, 0x22, 0x31, 0x04)
+│   │   │   │   ├── uds.rs           # ISO 14229 Services (0x10, 0x19, 0x22, 0x2E, 0x11, 0x31, 0x04)
 │   │   │   │   └── elm327.rs        # SAE J1979 Modes 01, 03, 04, 09, 22 parsers
 │   │   │   └── adapters/
 │   │   │       ├── enet.rs          # BMW ENET TCP client (169.254.1.1:6801)
@@ -175,7 +181,7 @@ Ensure all checks pass before submitting pull requests:
 # Verify formatting
 cargo fmt --all -- --check
 
-# Run all 47+ unit and integration tests
+# Run all 49+ unit and integration tests
 cargo test --workspace
 
 # Run strict clippy linting

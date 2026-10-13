@@ -1,11 +1,12 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, EcuHealth,
-    EcuNode, EngineDatalogFrame, ParameterType, ParameterValue, TopologyScanReport,
-    TransmissionOilStatus, VehicleProfile, WaterPumpBleedStatus, BMW_F10_ECUS,
+    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, CodingParameterDefinition,
+    DtcRecord, DtcStatus, EcuHealth, EcuNode, EngineDatalogFrame, ParameterType, ParameterValue,
+    TopologyScanReport, TransmissionOilStatus, VehicleProfile, WaterPumpBleedStatus, BMW_F10_ECUS,
 };
 use async_trait::async_trait;
+use std::collections::HashMap;
 use std::time::Instant;
 
 /// Realistic vehicle simulator for automated testing and CI/CD without physical vehicle hardware.
@@ -22,6 +23,7 @@ pub struct MockConnection {
     trans_fluid_temp_c: f32,
     fan_duty_percent: u8,
     exhaust_flap_open: bool,
+    coding_values: HashMap<String, u8>,
 }
 
 impl MockConnection {
@@ -128,6 +130,11 @@ impl MockConnection {
             ),
         };
 
+        let mut coding_values = HashMap::new();
+        for param in crate::profile::get_default_bmw_f10_coding_parameters() {
+            coding_values.insert(param.id, param.active_raw_value);
+        }
+
         Self {
             profile,
             connected: false,
@@ -141,6 +148,7 @@ impl MockConnection {
             trans_fluid_temp_c: 44.5,
             fan_duty_percent: 0,
             exhaust_flap_open: false,
+            coding_values,
         }
     }
 }
@@ -702,6 +710,110 @@ impl ObdConnection for MockConnection {
             VehicleProfile::GmcAcadia_2010 => Ok("1GKKVRED9AJ123456".into()),
             VehicleProfile::Simulator => Ok("WBAFR7C58BC123456".into()),
         }
+    }
+
+    async fn get_coding_parameters(&mut self) -> Result<Vec<CodingParameterDefinition>, ObdError> {
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                let mut params = crate::profile::get_default_bmw_f10_coding_parameters();
+                for param in &mut params {
+                    if let Some(&val) = self.coding_values.get(&param.id) {
+                        param.active_raw_value = val;
+                        if let Some(opt) = param.options.iter().find(|o| o.raw_value == val) {
+                            param.active_value = opt.label.clone();
+                        }
+                    }
+                }
+                Ok(params)
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Vehicle coding is only supported on BMW F/G-Series via ENET".into(),
+            )),
+        }
+    }
+
+    async fn write_coding_parameter(
+        &mut self,
+        param_id: &str,
+        raw_value: u8,
+    ) -> Result<String, ObdError> {
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                let mut params = crate::profile::get_default_bmw_f10_coding_parameters();
+                let Some(param) = params.iter_mut().find(|p| p.id == param_id) else {
+                    return Err(ObdError::Unsupported(format!(
+                        "Unknown coding parameter ID: {param_id}"
+                    )));
+                };
+
+                let prev_raw = self
+                    .coding_values
+                    .get(param_id)
+                    .copied()
+                    .unwrap_or(param.active_raw_value);
+                let prev_label = param
+                    .options
+                    .iter()
+                    .find(|o| o.raw_value == prev_raw)
+                    .map(|o| o.label.clone())
+                    .unwrap_or_else(|| format!("{:#04X}", prev_raw));
+
+                let new_label = param
+                    .options
+                    .iter()
+                    .find(|o| o.raw_value == raw_value)
+                    .map(|o| o.label.clone())
+                    .unwrap_or_else(|| format!("{:#04X}", raw_value));
+
+                // Save simulated backup to persistent garage
+                let garage = crate::garage::load_garage();
+                let backup_record = crate::profile::CodingBackupRecord {
+                    id: format!(
+                        "backup_{}_{}_{}",
+                        param.id,
+                        param.target_ecu.to_lowercase(),
+                        chrono::Utc::now().timestamp_millis()
+                    ),
+                    timestamp: crate::garage::current_iso_timestamp(),
+                    vehicle_id: garage.active_vehicle_id.clone(),
+                    param_id: param.id.clone(),
+                    param_name: param.name.clone(),
+                    ecu_name: param.target_ecu.clone(),
+                    ecu_address: param.ecu_address,
+                    previous_value_label: prev_label,
+                    previous_raw_value: prev_raw,
+                    new_value_label: new_label.clone(),
+                    new_raw_value: raw_value,
+                    payload_hex: format!("{prev_raw:02X} 00 00 00"),
+                };
+                let _ =
+                    crate::garage::save_coding_backup(&garage.active_vehicle_id, &backup_record);
+
+                // Update simulated memory
+                self.coding_values.insert(param_id.to_string(), raw_value);
+
+                Ok(format!(
+                    "Successfully coded '{}' to '{}' on {} ({:#04X}). Simulated ECU soft reset performed.",
+                    param.name, new_label, param.target_ecu, param.ecu_address
+                ))
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Vehicle coding is only supported on BMW F/G-Series via ENET".into(),
+            )),
+        }
+    }
+
+    async fn restore_coding_backup(&mut self, backup_id: &str) -> Result<String, ObdError> {
+        let garage = crate::garage::load_garage();
+        let backup = crate::garage::load_coding_backup(&garage.active_vehicle_id, backup_id)?;
+
+        self.coding_values
+            .insert(backup.param_id.clone(), backup.previous_raw_value);
+
+        Ok(format!(
+            "Successfully restored '{}' to previous state '{}' from backup.",
+            backup.param_name, backup.previous_value_label
+        ))
     }
 
     fn profile(&self) -> VehicleProfile {

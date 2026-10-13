@@ -83,6 +83,90 @@ pub fn build_exhaust_flap_request(open: bool) -> Vec<u8> {
     build_start_routine(ROUTINE_BMW_EXHAUST_FLAP, &[state])
 }
 
+/// Builds UDS Service 0x2E WriteDataByIdentifier request frame.
+pub fn build_write_did_request(did: u16, data: &[u8]) -> Vec<u8> {
+    let mut req = Vec::with_capacity(3 + data.len());
+    req.push(0x2E);
+    req.push((did >> 8) as u8);
+    req.push((did & 0xFF) as u8);
+    req.extend_from_slice(data);
+    req
+}
+
+/// Parses UDS Service 0x2E WriteDataByIdentifier response frame.
+/// Handles Positive Response (0x6E) and Negative Response (0x7F).
+pub fn parse_write_did_response(expected_did: u16, payload: &[u8]) -> Result<(), ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError(
+            "Empty WriteDataByIdentifier payload".into(),
+        ));
+    }
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x2E),
+            nrc,
+        ));
+    }
+    if payload[0] != 0x6E {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected WriteDataByIdentifier response SID: {:#04X}, expected 0x6E",
+            payload[0]
+        )));
+    }
+    if payload.len() < 3 {
+        return Err(ObdError::ParseError(
+            "WriteDataByIdentifier response frame truncated".into(),
+        ));
+    }
+    let returned_did = u16::from_be_bytes([payload[1], payload[2]]);
+    if returned_did != expected_did {
+        return Err(ObdError::Protocol(format!(
+            "Write DID mismatch: expected {expected_did:#04X}, received {returned_did:#04X}"
+        )));
+    }
+    Ok(())
+}
+
+/// Builds UDS Service 0x11 ECUReset request frame.
+/// Subfunctions: 0x01 = HardReset, 0x03 = SoftReset.
+pub fn build_ecu_reset_request(subfunction: u8) -> Vec<u8> {
+    vec![0x11, subfunction]
+}
+
+/// Parses UDS Service 0x11 ECUReset response frame.
+/// Positive response starts with 0x51.
+pub fn parse_ecu_reset_response(subfunction: u8, payload: &[u8]) -> Result<(), ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError("Empty ECUReset payload".into()));
+    }
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x11),
+            nrc,
+        ));
+    }
+    if payload[0] != 0x51 {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected ECUReset response SID: {:#04X}, expected 0x51",
+            payload[0]
+        )));
+    }
+    if payload.len() < 2 {
+        return Err(ObdError::ParseError(
+            "ECUReset response frame truncated".into(),
+        ));
+    }
+    if payload[1] != subfunction {
+        return Err(ObdError::Protocol(format!(
+            "ECUReset subfunction mismatch: expected {subfunction:#04X}, received {:#04X}",
+            payload[1]
+        )));
+    }
+    Ok(())
+}
+
 /// Parses Transmission Sump Fluid Temperature from DID 0x2045 response payload.
 pub fn parse_transmission_temp_response(payload: &[u8]) -> Result<f32, ObdError> {
     if payload.is_empty() {

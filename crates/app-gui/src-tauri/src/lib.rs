@@ -1,11 +1,11 @@
 use obd_core::{
     append_service_log, check_for_updates, current_iso_timestamp, evaluate_compatibility,
     load_garage, load_vehicle_history, save_garage, BatteryStatus, BluetoothConnection,
-    CbsItemType, CbsReport, DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus,
-    DtcRecord, EnetConnection, EngineDatalogFrame, Garage, HardwareCompatibilityInfo,
-    MockConnection, ObdConnection, TopologyScanReport, TransmissionOilStatus, UpdateInfo,
-    VehicleHistory, VehicleManager, VehicleProfile, VehicleRecord, VehicleServiceLogEntry,
-    WaterPumpBleedStatus,
+    CbsItemType, CbsReport, CodingBackupRecord, CodingParameterDefinition, DashboardSnapshot,
+    DatalogRecordingSummary, DataloggerStatus, DtcRecord, EnetConnection, EngineDatalogFrame,
+    Garage, HardwareCompatibilityInfo, MockConnection, ObdConnection, TopologyScanReport,
+    TransmissionOilStatus, UpdateInfo, VehicleHistory, VehicleManager, VehicleProfile,
+    VehicleRecord, VehicleServiceLogEntry, WaterPumpBleedStatus,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -251,6 +251,43 @@ async fn detect_vehicle_vin(state: State<'_, AppState>) -> Result<DetectedVinRes
         matched_vehicle_id: matched_id,
         message,
     })
+}
+
+#[tauri::command]
+async fn get_coding_parameters(
+    state: State<'_, AppState>,
+) -> Result<Vec<CodingParameterDefinition>, String> {
+    let mgr = state.manager.lock().await;
+    mgr.get_coding_parameters().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn write_coding_parameter(
+    param_id: String,
+    raw_value: u8,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.write_coding_parameter(&param_id, raw_value)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_coding_backups(state: State<'_, AppState>) -> Result<Vec<CodingBackupRecord>, String> {
+    let mgr = state.manager.lock().await;
+    Ok(mgr.list_coding_backups().await)
+}
+
+#[tauri::command]
+async fn restore_coding_backup(
+    backup_id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.restore_coding_backup(&backup_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -538,7 +575,11 @@ pub fn run() {
             set_active_vehicle,
             save_vehicle_profile,
             delete_vehicle_profile,
-            detect_vehicle_vin
+            detect_vehicle_vin,
+            get_coding_parameters,
+            write_coding_parameter,
+            get_coding_backups,
+            restore_coding_backup
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {

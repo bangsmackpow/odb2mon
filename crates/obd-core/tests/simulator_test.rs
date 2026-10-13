@@ -373,3 +373,89 @@ async fn test_gmc_datalog_unsupported() {
     let datalog_err = manager.read_engine_datalog().await.unwrap_err();
     assert!(matches!(datalog_err, obd_core::ObdError::Unsupported(_)));
 }
+
+#[tokio::test]
+async fn test_bmw_coding_read_and_write() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    // 1. Read default parameters
+    let params = conn.get_coding_parameters().await.unwrap();
+    assert_eq!(params.len(), 12);
+
+    let gong = params.iter().find(|p| p.id == "warning_gong").unwrap();
+    assert_eq!(gong.active_value, "BMW Standard");
+    assert_eq!(gong.active_raw_value, 0x00);
+    assert_eq!(gong.target_ecu, "KOMBI");
+
+    // 2. Write modification: change to Rolls-Royce (0x01)
+    let res = conn
+        .write_coding_parameter("warning_gong", 0x01)
+        .await
+        .unwrap();
+    assert!(res.contains("KOMBI"));
+    assert!(res.contains("Rolls-Royce"));
+
+    // 3. Verify modified parameter
+    let updated_params = conn.get_coding_parameters().await.unwrap();
+    let updated_gong = updated_params
+        .iter()
+        .find(|p| p.id == "warning_gong")
+        .unwrap();
+    assert_eq!(updated_gong.active_raw_value, 0x01);
+    assert_eq!(updated_gong.active_value, "Rolls-Royce (Gentle Chime)");
+
+    // 4. Test Auto-Folding Mirrors (CAS 0x0040)
+    let mirror_res = conn
+        .write_coding_parameter("auto_fold_mirrors", 0x01)
+        .await
+        .unwrap();
+    assert!(mirror_res.contains("CAS"));
+
+    let mirror_params = conn.get_coding_parameters().await.unwrap();
+    let updated_mirrors = mirror_params
+        .iter()
+        .find(|p| p.id == "auto_fold_mirrors")
+        .unwrap();
+    assert_eq!(updated_mirrors.active_raw_value, 0x01);
+    assert_eq!(
+        updated_mirrors.active_value,
+        "Instant on Door Lock (0s delay)"
+    );
+
+    // 5. Verify backups were generated
+    let garage = obd_core::load_garage();
+    let backups = obd_core::list_coding_backups(&garage.active_vehicle_id);
+    assert!(!backups.is_empty());
+
+    // 6. Test restore from backup
+    let gong_backup = backups
+        .iter()
+        .find(|b| b.param_id == "warning_gong")
+        .unwrap();
+    let restore_msg = conn.restore_coding_backup(&gong_backup.id).await.unwrap();
+    assert!(restore_msg.contains("restored"));
+
+    let restored_params = conn.get_coding_parameters().await.unwrap();
+    let restored_gong = restored_params
+        .iter()
+        .find(|p| p.id == "warning_gong")
+        .unwrap();
+    assert_eq!(restored_gong.active_raw_value, 0x00);
+    assert_eq!(restored_gong.active_value, "BMW Standard");
+}
+
+#[tokio::test]
+async fn test_gmc_coding_unsupported() {
+    let mut conn = MockConnection::new(VehicleProfile::GmcAcadia_2010);
+    conn.connect().await.unwrap();
+
+    let read_err = conn.get_coding_parameters().await.unwrap_err();
+    assert!(matches!(read_err, obd_core::ObdError::Unsupported(_)));
+
+    let write_err = conn
+        .write_coding_parameter("warning_gong", 0x01)
+        .await
+        .unwrap_err();
+    assert!(matches!(write_err, obd_core::ObdError::Unsupported(_)));
+}

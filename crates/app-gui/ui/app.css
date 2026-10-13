@@ -2714,6 +2714,334 @@ body {
   font-size: 0.85rem;
 }
 
+/* =========================================================================
+   Vehicle Coding & Customization View
+   ========================================================================= */
+
+.coding-voltage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.4);
+  color: var(--accent-green);
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 6px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+
+.coding-voltage-pill.warn {
+  background-color: rgba(255, 23, 68, 0.15);
+  border-color: rgba(255, 23, 68, 0.5);
+  color: var(--accent-red);
+}
+
+.coding-safety-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background-color: rgba(0, 176, 255, 0.08);
+  border: 1px solid rgba(0, 176, 255, 0.25);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.coding-safety-banner .safety-icon {
+  font-size: 1.5rem;
+}
+
+.coding-safety-banner .safety-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.coding-safety-banner .safety-info strong {
+  color: #00b0ff;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.coding-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.coding-filter-btn {
+  background-color: #12151e;
+  border: 1px solid var(--border-dim);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.coding-filter-btn:hover {
+  background-color: #1a1f2c;
+  color: var(--text-main);
+  border-color: var(--border-bright);
+}
+
+.coding-filter-btn.active {
+  background-color: rgba(0, 229, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.coding-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.coding-card {
+  background-color: #11141c;
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.coding-card:hover {
+  border-color: rgba(0, 229, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.coding-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.coding-card-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coding-cat-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.coding-param-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.coding-ecu-badge {
+  background-color: #1c2230;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #00e5ff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.coding-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.coding-active-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.coding-active-pill {
+  background-color: rgba(0, 230, 118, 0.12);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  color: var(--accent-green);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.coding-select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.coding-select-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.coding-select {
+  width: 100%;
+  background-color: #090b10;
+  border: 1px solid var(--border-dim);
+  color: var(--text-main);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.coding-select:focus {
+  border-color: var(--accent-cyan);
+}
+
+.coding-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.coding-card-status {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.coding-card-status.success { color: var(--accent-green); }
+.coding-card-status.error { color: var(--accent-red); }
+
+/* Coding Modals */
+.coding-modal-card {
+  width: 520px;
+}
+
+.confirm-prompt {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.confirm-detail-box {
+  background-color: #0c0e14;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.confirm-row .c-lbl {
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.confirm-row .c-val {
+  color: #fff;
+  font-weight: 700;
+}
+
+.coding-warning-callout {
+  background-color: rgba(255, 179, 0, 0.1);
+  border: 1px solid rgba(255, 179, 0, 0.3);
+  color: #ffb300;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.coding-backups-modal-card {
+  width: 650px;
+}
+
+.backups-list-container {
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.backup-item-card {
+  background-color: #0c0e14;
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.backup-item-card:hover {
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.backup-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.backup-header-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backup-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.backup-time {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.backup-val-trans {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+
 
 
 

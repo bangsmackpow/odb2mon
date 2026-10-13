@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">OBD2MON</span>
-        <span class="version-badge" id="appVersion">v0.8.0</span>
+        <span class="version-badge" id="appVersion">v0.9.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -30,6 +30,9 @@
         </button>
         <button class="nav-btn" data-page="datalog">
           <span class="icon">📈</span> DATALOGGER
+        </button>
+        <button class="nav-btn" data-page="coding">
+          <span class="icon">🎛</span> CODING
         </button>
         <button class="nav-btn" data-page="profiles">
           <span class="icon">🚘</span> GARAGE
@@ -665,7 +668,46 @@
         </div>
       </section>
 
-      <!-- 6. SAVED VEHICLES & GARAGE PROFILES VIEW -->
+      <!-- 6. VEHICLE CODING & CUSTOMIZATION VIEW -->
+      <section id="page-coding" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>VEHICLE CODING & CUSTOMIZATION</h2>
+            <p>FDL feature configuration for BMW F/G-Series (Chimes, Lighting, Mirrors, Engine Start/Stop)</p>
+          </div>
+          <div class="toolbar-actions">
+            <span class="coding-voltage-pill" id="codingVoltageBadge">⚡ 12.6V Battery Safe</span>
+            <button class="btn btn-secondary" id="btnRefreshCoding">🔄 READ PARAMETERS</button>
+            <button class="btn btn-outline" id="btnOpenCodingBackups">💾 BACKUPS & RESTORE (<span id="codingBackupCount">0</span>)</button>
+          </div>
+        </div>
+
+        <!-- Pre-Coding Safety Banner -->
+        <div class="coding-safety-banner">
+          <div class="safety-icon">🛡️</div>
+          <div class="safety-info">
+            <strong>SAFETY PROTOCOL ACTIVE:</strong>
+            <span>obd2mon automatically creates a timestamped ECU parameter backup before writing any changes. Maintain battery voltage &gt; 12.0V or keep engine idling to ensure safe non-volatile memory programming.</span>
+          </div>
+        </div>
+
+        <!-- Filter Subtabs -->
+        <div class="coding-filter-bar">
+          <button class="coding-filter-btn active" data-category="all">ALL FEATURES (<span id="countCodingAll">12</span>)</button>
+          <button class="coding-filter-btn" data-category="Chimes & Warnings">CHIMES & WARNINGS</button>
+          <button class="coding-filter-btn" data-category="Lighting & Timing">LIGHTING & TIMING</button>
+          <button class="coding-filter-btn" data-category="Mirrors & Convenience">MIRRORS & CONVENIENCE</button>
+          <button class="coding-filter-btn" data-category="Engine & Start-Stop">ENGINE & START/STOP</button>
+          <button class="coding-filter-btn" data-category="Displays & Cluster">DISPLAYS & CLUSTER</button>
+        </div>
+
+        <!-- Coding Parameters Grid -->
+        <div class="coding-grid" id="codingCardsGrid">
+          <!-- Dynamically populated or rendered via app.js -->
+        </div>
+      </section>
+
+      <!-- 7. SAVED VEHICLES & GARAGE PROFILES VIEW -->
       <section id="page-profiles" class="page">
         <div class="section-toolbar">
           <div class="toolbar-title">
@@ -773,6 +815,7 @@
             <button class="doc-link" data-doc="actuators">💧 Actuator Service Routines</button>
             <button class="doc-link" data-doc="datalogger">📈 N55 High-Speed Datalogging</button>
             <button class="doc-link" data-doc="garage">🚘 Garage & Vehicle Profiles</button>
+            <button class="doc-link" data-doc="coding">🎛 BMW FDL Coding & Customization</button>
             <button class="doc-link" data-doc="hardware">⚙ Hardware Setup & Cable Wiring</button>
           </aside>
 
@@ -994,7 +1037,37 @@
               </div>
             </article>
 
-            <!-- Article 9: Hardware -->
+            <!-- Article 11: BMW FDL Coding -->
+            <article class="doc-article" id="doc-coding">
+              <h3>BMW FDL Coding & Vehicle Customizations</h3>
+              <p>FDL (Funktionsdatenlese) coding allows users to configure and personalize factory features across electronic control units over standard ISO 14229 UDS diagnostic services.</p>
+
+              <div class="doc-card">
+                <h4>Diagnostic Architecture & Services</h4>
+                <ul>
+                  <li><strong>Read Parameters:</strong> Queries non-volatile memory configuration blocks using UDS Service <code>0x22</code> (Read Data By Identifier).</li>
+                  <li><strong>Write Parameters:</strong> Elevates communication to Extended Diagnostic Session (<code>0x10 0x03</code>) and updates the target byte/bitmask with Service <code>0x2E</code> (Write Data By Identifier).</li>
+                  <li><strong>Module Reload:</strong> Dispatches UDS Service <code>0x11 0x03</code> (ECU Soft Reset) to command the target controller to apply the newly written configuration immediately.</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>Configurable Systems & ECUs</h4>
+                <ul>
+                  <li><strong>KOMBI (Instrument Cluster, 0x0060):</strong> Warning Gong tone (BMW Standard, Rolls-Royce, BMW i, Mini), Digital speedometer in center cluster display.</li>
+                  <li><strong>CAS (Car Access System, 0x0040):</strong> Seat belt warning chime disable, Comfort Access instant auto-folding mirrors on lock, Auto-unlock doors on engine stop, Auto Start/Stop memory.</li>
+                  <li><strong>FRM (Footwell Module, 0x0072):</strong> Welcome lights duration (10s–60s), Pathway follow-me-home headlights timing (30s–120s), Comfort turn signals (1, 3, or 5 blinks), Angel eye halo ring brightness with low beams (8%, 12%, 50%, 100%), Fog lights on with high beams.</li>
+                  <li><strong>HU_NBT (iDrive Headunit, 0x0063):</strong> Startup legal disclaimer removal / instant boot.</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>Safety Protocols & Automated Backups</h4>
+                <p>Prior to executing any write command, obd2mon captures a snapshot of the target DID block to disk under <code>vehicles/&lt;vehicle_id&gt;/coding_backups/</code>. If any unexpected behavior occurs, you can one-click restore any previous state from the <strong>BACKUPS & RESTORE</strong> modal. Furthermore, the Intelligent Battery Sensor (DID <code>0xD010</code>) guards against programming if battery voltage drops below 12.0V.</p>
+              </div>
+            </article>
+
+            <!-- Article 12: Hardware -->
             <article class="doc-article" id="doc-hardware">
               <h3>Hardware Setup & Cable Wiring</h3>
               <div class="doc-card">
@@ -1323,6 +1396,76 @@
 
         <div class="modal-actions" style="margin-top: 16px;">
           <button class="btn btn-secondary" id="btnCloseHistoryModal">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coding Confirmation Modal -->
+    <div class="modal-overlay" id="codingConfirmModal" style="display: none;">
+      <div class="modal-card coding-modal-card">
+        <div class="modal-header-row">
+          <div>
+            <h3>CONFIRM CODING WRITE</h3>
+            <span class="ecu-modal-sub">Direct Non-Volatile Memory (NVM) Parameter Update</span>
+          </div>
+          <button class="modal-close-btn" id="btnCloseCodingConfirmX">✕</button>
+        </div>
+
+        <div class="coding-confirm-body">
+          <p class="confirm-prompt">You are about to write the following parameter to the vehicle ECU:</p>
+          
+          <div class="confirm-detail-box">
+            <div class="confirm-row">
+              <span class="c-lbl">FEATURE:</span>
+              <strong class="c-val" id="confirmParamName">Warning Gong Tone</strong>
+            </div>
+            <div class="confirm-row">
+              <span class="c-lbl">TARGET ECU:</span>
+              <strong class="c-val" id="confirmTargetEcu">KOMBI (0x0060)</strong>
+            </div>
+            <div class="confirm-row">
+              <span class="c-lbl">CURRENT ACTIVE VALUE:</span>
+              <span class="c-val text-muted" id="confirmCurrentVal">BMW Standard</span>
+            </div>
+            <div class="confirm-row">
+              <span class="c-lbl">NEW TARGET VALUE:</span>
+              <strong class="c-val text-cyan" id="confirmNewVal">Rolls-Royce (Gentle Chime)</strong>
+            </div>
+          </div>
+
+          <div class="coding-warning-callout">
+            ⚠️ An automated backup will be generated. The target ECU will undergo a soft reset (Service 0x11 0x03) immediately after writing to apply parameters.
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button class="btn btn-secondary" id="btnCancelCodingConfirm">CANCEL</button>
+          <button class="btn btn-primary" id="btnExecuteCodingWrite">⚡ WRITE & APPLY CODING</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coding Backups & History Modal -->
+    <div class="modal-overlay" id="codingBackupsModal" style="display: none;">
+      <div class="modal-card coding-backups-modal-card">
+        <div class="modal-header-row">
+          <div>
+            <h3>PRE-CODING BACKUP ARCHIVE</h3>
+            <span class="ecu-modal-sub">Factory & Historical Parameter Snapshots</span>
+          </div>
+          <button class="modal-close-btn" id="btnCloseCodingBackupsX">✕</button>
+        </div>
+
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-top: 6px;">
+          Every parameter modification is archived prior to writing. Click "RESTORE" to revert the parameter and execute an ECU soft reset.
+        </p>
+
+        <div class="backups-list-container" id="codingBackupsList">
+          <!-- Backups dynamically populated here -->
+        </div>
+
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button class="btn btn-secondary" id="btnCloseCodingBackups">CLOSE</button>
         </div>
       </div>
     </div>

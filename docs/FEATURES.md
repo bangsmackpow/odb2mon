@@ -149,8 +149,39 @@ obd2mon provides comprehensive multi-vehicle garage management, hardware interfa
   - Reads VIN from vehicle bus via UDS DID `0xF190` (DoIP) or SAE J1979 Mode 09 PID `0x02` (ELM327).
   - Auto-matches against saved garage profiles to suggest switching profiles or populates new vehicle creation forms.
 - **Persistent Per-Vehicle Logbooks:**
-  - Automatically records every service action (Battery Registrations, CBS Resets, Water Pump Bleed cycles, Transmission Level cycles, DTC Clears) into persistent storage under `%APPDATA%\obd2mon\vehicles\<vehicle_id>\history.json`.
+  - Automatically records every service action (Battery Registrations, CBS Resets, Water Pump Bleed cycles, Transmission Level cycles, DTC Clears, Coding Parameter Writes) into persistent storage under `%APPDATA%\obd2mon\vehicles\<vehicle_id>\history.json`.
   - Historical DTC scans record fault codes, timestamps, and freeze frame metrics.
   - Datalog sessions track recorded CSV logs, duration, sample counts, and disk locations.
   - Drivers can record manual maintenance entries (oil services, brakes, spark plugs) with current odometer readings.
+
+---
+
+## 11. Vehicle Coding & Feature Customization (FDL / UDS)
+obd2mon provides factory-level feature configuration (FDL Coding equivalent to E-Sys / BimmerCode) over UDS and DoIP Ethernet.
+
+### Architecture & Protocol Operations
+1. **Extended Diagnostic Session Elevation (Service 0x10 0x03):** Automatically elevated prior to write operations.
+2. **Pre-Coding Battery Voltage Interlock:** Queries live IBS voltage and requires `>= 12.0V` before issuing write frames to safeguard against ECU brownout or corrupted EEPROM sectors.
+3. **Automated Rollback Archive:** Captures the target DID's existing payload and stores a timestamped snapshot under `%APPDATA%\obd2mon\vehicles\<vehicle_id>\coding_backups\<id>.json`.
+4. **Direct Non-Volatile Memory Update (Service 0x2E WriteDataByIdentifier):** Modifies the exact byte offset and bitmask in the module's coding block.
+5. **Targeted ECU Soft Reset (Service 0x11 0x03):** Commands the target controller to immediately cycle internal software and reload parameters from non-volatile memory without power-cycling the whole car.
+6. **Automatic Audit Trail Logging:** Appends every coding write to the vehicle's persistent `history.json` logbook.
+
+### Configurable Parameter Catalog
+
+| Category | Parameter Name | Target ECU | Address | DID | Configurable Options |
+|---|---|---|---|---|---|
+| **Chimes & Warnings** | Warning Gong Tone | KOMBI | `0x0060` | `0x3000` | BMW Standard (OEM), Rolls-Royce Gentle Chime, BMW i Electro, Mini Cooper |
+| **Chimes & Warnings** | Seat Belt Reminder Chime | CAS | `0x0040` | `0x3001` | Enabled (OEM), Disabled |
+| **Lighting & Timing** | Welcome Light Duration | FRM | `0x0072` | `0x3010` | Off, 10s, 20s (OEM), 40s, 60s |
+| **Lighting & Timing** | Pathway (Follow-Me-Home) Lights | FRM | `0x0072` | `0x3011` | Off, 30s (OEM), 60s, 90s, 120s |
+| **Lighting & Timing** | Comfort Turn Signal Blinks | FRM | `0x0072` | `0x3012` | 1 Blink, 3 Blinks (OEM), 5 Blinks |
+| **Lighting & Timing** | Angel Eye DRL Brightness | FRM | `0x0072` | `0x3013` | 50%, 70%, 100% Full Brightness |
+| **Lighting & Timing** | Fog Lights with High Beams | FRM | `0x0072` | `0x3014` | High Beams Shut Off Fogs (OEM), Fogs Stay Active |
+| **Mirrors & Convenience** | Auto-Fold Side Mirrors on Lock | CAS | `0x0040` | `0x3020` | Disabled (OEM), Enabled (Hold Fob 0.5s), Enabled (Immediate) |
+| **Mirrors & Convenience** | Auto-Unlock Doors on Engine Stop | CAS | `0x0040` | `0x3021` | Disabled (OEM), Auto-Unlock on Ignition Off |
+| **Engine & Start-Stop** | Auto Start/Stop Function Memory | CAS | `0x0040` | `0x3030` | Default ON (OEM), Remember Last State, Default OFF |
+| **Displays & Cluster** | Digital Speedometer in Cluster | KOMBI | `0x0060` | `0x3040` | Disabled (OEM), Enabled in Board Computer |
+| **Displays & Cluster** | iDrive Startup Legal Disclaimer | HU_NBT | `0x0063` | `0x3041` | Enabled (OEM), Disabled (Immediate Boot) |
+
 

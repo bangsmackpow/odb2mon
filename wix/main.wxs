@@ -7,7 +7,7 @@
         Manufacturer='obd2mon Contributors'
         Language='1033'
         Codepage='1252'
-        Version='0.8.0'>
+        Version='0.9.0'>
 
         <Package Id='*' Keywords='Installer' Description="obd2mon Vehicle Diagnostics Installer"
             Comments='Cross-Platform OBD2/UDS Diagnostics' Manufacturer='obd2mon Contributors'

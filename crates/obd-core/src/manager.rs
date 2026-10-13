@@ -1,7 +1,7 @@
 use crate::connection::ObdConnection;
 use crate::profile::{
-    DashboardSnapshot, DatalogRecordingSummary, DataloggerStatus, EngineDatalogFrame,
-    ParameterType, ParameterValue,
+    CodingBackupRecord, CodingParameterDefinition, DashboardSnapshot, DatalogRecordingSummary,
+    DataloggerStatus, EngineDatalogFrame, ParameterType, ParameterValue,
 };
 use std::sync::Arc;
 use std::time::Instant;
@@ -478,5 +478,79 @@ impl VehicleManager {
             sample_count: session.frames.len(),
             elapsed_seconds: if session.is_recording { elapsed } else { 0.0 },
         })
+    }
+
+    /// Queries vehicle FDL coding parameters and their current values.
+    pub async fn get_coding_parameters(
+        &self,
+    ) -> Result<Vec<CodingParameterDefinition>, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        if !conn.is_connected() {
+            conn.connect().await?;
+        }
+        conn.get_coding_parameters().await
+    }
+
+    /// Writes an FDL coding parameter and logs change into active vehicle's history.
+    pub async fn write_coding_parameter(
+        &self,
+        param_id: &str,
+        raw_value: u8,
+    ) -> Result<String, crate::error::ObdError> {
+        let res = {
+            let mut conn = self.connection.lock().await;
+            if !conn.is_connected() {
+                conn.connect().await?;
+            }
+            conn.write_coding_parameter(param_id, raw_value).await?
+        };
+
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "coding".into(),
+                description: format!("FDL Coding written: {param_id} -> {raw_value:#04X}"),
+                result: res.clone(),
+            },
+        );
+
+        Ok(res)
+    }
+
+    /// Lists persistent coding backup history for active vehicle.
+    pub async fn list_coding_backups(&self) -> Vec<CodingBackupRecord> {
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        crate::garage::list_coding_backups(&active_id)
+    }
+
+    /// Restores a coding parameter from a previously saved backup record.
+    pub async fn restore_coding_backup(
+        &self,
+        backup_id: &str,
+    ) -> Result<String, crate::error::ObdError> {
+        let res = {
+            let mut conn = self.connection.lock().await;
+            if !conn.is_connected() {
+                conn.connect().await?;
+            }
+            conn.restore_coding_backup(backup_id).await?
+        };
+
+        let active_id = self.active_vehicle_id.lock().await.clone();
+        let _ = crate::garage::append_service_log(
+            &active_id,
+            crate::garage::VehicleServiceLogEntry {
+                timestamp: crate::garage::current_iso_timestamp(),
+                mileage: None,
+                category: "coding".into(),
+                description: format!("Restored coding parameter from backup {backup_id}"),
+                result: res.clone(),
+            },
+        );
+
+        Ok(res)
     }
 }
