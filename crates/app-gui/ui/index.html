@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.5.0</span>
+        <span class="version-badge" id="appVersion">v0.6.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -33,6 +33,9 @@
         </button>
         <button class="nav-btn" data-page="updates">
           <span class="icon">🔄</span> UPDATES
+        </button>
+        <button class="nav-btn" data-page="docs">
+          <span class="icon">📖</span> DOCS
         </button>
       </nav>
 
@@ -321,6 +324,135 @@
         <div class="cbs-grid" id="cbsItemsGrid">
           <!-- Dynamically rendered -->
         </div>
+
+        <!-- BMW Actuator Service Routines Section -->
+        <div class="section-divider"></div>
+
+        <div class="section-toolbar" style="margin-top: 24px;">
+          <div class="toolbar-title">
+            <h2>ACTUATOR SERVICE ROUTINES</h2>
+            <p>Direct component diagnostic actuations & calibration routines (Electric Coolant Pump, ZF 8HP Transmission, Radiator Fan, Exhaust Flap)</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="btnRefreshActuators">🔄 REFRESH ACTUATOR STATUS</button>
+          </div>
+        </div>
+
+        <div class="actuators-grid">
+          <!-- Actuator Card 1: Electric Water Pump Bleed Routine -->
+          <div class="actuator-card">
+            <div class="actuator-card-header">
+              <span class="service-tag cyan">ROUTINE 0x31 (ID 0x0211)</span>
+              <h3>Cooling System Electric Water Pump Bleed</h3>
+            </div>
+            <p class="service-desc">
+              Automated air pocket purging routine across N55 engine cooling circuit. Pulses 400W electric coolant pump through priming, high-velocity displacement, and stabilization stages.
+            </p>
+
+            <div class="bleed-progress-container">
+              <div class="bleed-progress-header">
+                <span class="bleed-stage-name" id="bleedStageName">Idle / Ready to start</span>
+                <span class="bleed-progress-val" id="bleedProgressVal">0%</span>
+              </div>
+              <div class="bleed-progress-track">
+                <div class="bleed-progress-fill" id="bleedProgressFill" style="width: 0%"></div>
+              </div>
+              <div class="bleed-meta-row">
+                <div><span>PUMP SPEED:</span> <strong id="bleedPumpSpeed">0% PWM</strong></div>
+                <div><span>ELAPSED:</span> <strong id="bleedElapsed">0s</strong></div>
+                <div><span>REMAINING:</span> <strong id="bleedRemaining">12m 00s</strong></div>
+              </div>
+            </div>
+
+            <div class="actuator-action-bar">
+              <button class="btn btn-primary" id="btnStartBleed">START BLEED ROUTINE (0x0211)</button>
+              <button class="btn btn-secondary" id="btnStopBleed" style="display: none;">STOP / ABORT</button>
+              <span class="actuator-status-text" id="bleedStatusText"></span>
+            </div>
+          </div>
+
+          <!-- Actuator Card 2: ZF 8HP Transmission Fluid Temperature -->
+          <div class="actuator-card">
+            <div class="actuator-card-header">
+              <span class="service-tag green">EGS 0x0018 (DID 0x2045 & ROUTINE 0x0225)</span>
+              <h3>ZF 8HP Transmission Fluid Temperature & Level</h3>
+            </div>
+            <p class="service-desc">
+              Accurate fluid level checking requires transmission sump oil to be strictly between <strong>40°C and 50°C</strong> (104°F - 122°F) to avoid under/over-filling due to thermal fluid expansion.
+            </p>
+
+            <div class="trans-temp-display">
+              <div class="trans-temp-val-group">
+                <span class="trans-temp-deg" id="transTempC">--.- °C</span>
+                <span class="trans-temp-sub" id="transTempF">(--.- °F)</span>
+              </div>
+              <span class="trans-window-badge" id="transWindowBadge">CHECKING...</span>
+            </div>
+
+            <!-- Visual Temperature Target Zone Strip -->
+            <div class="temp-strip-container">
+              <div class="temp-strip-bar">
+                <div class="strip-zone cold">COLD &lt;40°C</div>
+                <div class="strip-zone target">OPTIMAL FILL 40°C - 50°C</div>
+                <div class="strip-zone hot">HOT &gt;50°C</div>
+              </div>
+            </div>
+            <div class="trans-status-msg" id="transStatusMsg">
+              Ready to query transmission sump temperature.
+            </div>
+
+            <div class="actuator-action-bar" style="margin-top: 12px;">
+              <button class="btn btn-secondary" id="btnStartTransFill">EXECUTE EGS OIL LEVEL CYCLE (0x0225)</button>
+              <span class="actuator-status-text" id="transRoutineStatus"></span>
+            </div>
+          </div>
+
+          <!-- Actuator Card 3: Radiator Electric Cooling Fan Step Test -->
+          <div class="actuator-card">
+            <div class="actuator-card-header">
+              <span class="service-tag amber">ROUTINE 0x31 (ID 0x0215)</span>
+              <h3>Radiator Electric Cooling Fan Step Test</h3>
+            </div>
+            <p class="service-desc">
+              Overrides DME engine cooling logic to test variable-speed PWM electric cooling fan operation at defined speed steps.
+            </p>
+
+            <div class="fan-status-bar">
+              <span>COMMANDED DUTY:</span>
+              <strong id="fanDutyVal" class="fan-duty-pill">AUTO (DME CONTROL)</strong>
+            </div>
+
+            <div class="fan-preset-buttons">
+              <button class="btn btn-secondary btn-fan-step" data-duty="15">TEST 15% (LOW)</button>
+              <button class="btn btn-secondary btn-fan-step" data-duty="50">TEST 50% (MED)</button>
+              <button class="btn btn-secondary btn-fan-step" data-duty="90">TEST 90% (HIGH)</button>
+              <button class="btn btn-warning btn-fan-step" data-duty="0">RESTORE AUTO (0%)</button>
+            </div>
+            <span class="actuator-status-text" id="fanStatusText" style="margin-top: 8px; display: block;"></span>
+          </div>
+
+          <!-- Actuator Card 4: Muffler Exhaust Flap Actuator -->
+          <div class="actuator-card">
+            <div class="actuator-card-header">
+              <span class="service-tag cyan">ROUTINE 0x31 (ID 0x0218)</span>
+              <h3>Muffler Tailpipe Exhaust Flap</h3>
+            </div>
+            <p class="service-desc">
+              Tests pneumatic/electric exhaust flapper valve in the right tailpipe. Toggle between open (sport exhaust note) and closed (cold-start noise reduction).
+            </p>
+
+            <div class="flap-status-bar">
+              <span>CURRENT STATE:</span>
+              <strong id="flapStateVal" class="flap-state-pill">AUTO (CLOSED)</strong>
+            </div>
+
+            <div class="flap-toggle-buttons">
+              <button class="btn btn-primary" id="btnOpenFlap">FORCE OPEN (SPORT SOUND)</button>
+              <button class="btn btn-secondary" id="btnCloseFlap">FORCE CLOSE (QUIET MODE)</button>
+            </div>
+            <span class="actuator-status-text" id="flapStatusText" style="margin-top: 8px; display: block;"></span>
+          </div>
+        </div>
       </section>
 
       <!-- 4. VEHICLE PROFILES VIEW -->
@@ -380,7 +512,7 @@
         <div class="update-card" id="updateCard">
           <div class="update-header">
             <div>
-              <h3 id="updateVersionTitle">Current Version: v0.5.0</h3>
+              <h3 id="updateVersionTitle">Current Version: v0.6.0</h3>
               <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
             </div>
             <span class="update-pill" id="updatePill">UP TO DATE</span>
@@ -389,6 +521,191 @@
           <div class="update-details" id="updateDetails" style="display: none;">
             <div class="release-notes" id="updateReleaseNotes"></div>
             <div class="update-links" id="updateLinks"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. DOCUMENTATION & TECHNICAL REFERENCE VIEW -->
+      <section id="page-docs" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>SYSTEM DOCUMENTATION & FEATURE REFERENCE</h2>
+            <p>Comprehensive technical manual covering vehicle protocols, diagnostic identifiers (DIDs), and service routines</p>
+          </div>
+        </div>
+
+        <div class="docs-layout">
+          <aside class="docs-nav-sidebar">
+            <button class="doc-link active" data-doc="arch">🔌 Architecture & Protocols</button>
+            <button class="doc-link" data-doc="telemetry">📊 Live Dashboard Telemetry</button>
+            <button class="doc-link" data-doc="dtcs">🛠 Fault Codes & Status Masks</button>
+            <button class="doc-link" data-doc="topology">🕸 ECU Network Topology (Tree)</button>
+            <button class="doc-link" data-doc="battery">⚡ Battery & IBS Power Management</button>
+            <button class="doc-link" data-doc="cbs">📋 Condition Based Service (CBS)</button>
+            <button class="doc-link" data-doc="actuators">💧 Actuator Service Routines</button>
+            <button class="doc-link" data-doc="hardware">⚙ Hardware Setup & Cable Wiring</button>
+          </aside>
+
+          <div class="docs-content-pane">
+            <!-- Article 1: Architecture -->
+            <article class="doc-article active" id="doc-arch">
+              <h3>Vehicle Communication Architecture & Protocol Stack</h3>
+              <p>odb2mon is architected for low-latency vehicle interrogation using modern European OEM diagnostic standards:</p>
+              
+              <div class="doc-card">
+                <h4>ISO 13400 (DoIP - Diagnostic over Internet Protocol)</h4>
+                <p>High-speed vehicle communication over standard Ethernet. The diagnostic tool establishes a TCP socket connection to the vehicle Central Gateway Module (ZGW at <code>169.254.1.1:6801</code>). Handshake requires sending a Routing Activation Request (<code>0x0005</code>) with source tester address <code>0x0E00</code> before dispatching diagnostic messages.</p>
+              </div>
+
+              <div class="doc-card">
+                <h4>ISO 14229 (UDS - Unified Diagnostic Services)</h4>
+                <p>Standardized diagnostic service layer running over DoIP frames. Supports:</p>
+                <ul>
+                  <li><strong>Service 0x10:</strong> Diagnostic Session Control (Default Session <code>0x01</code>, Extended Diagnostic Session <code>0x03</code>).</li>
+                  <li><strong>Service 0x22:</strong> Read Data By Identifier (DID) for manufacturer engineering telemetry.</li>
+                  <li><strong>Service 0x31:</strong> Routine Control (Start <code>0x01</code>, Stop <code>0x02</code>, Request Results <code>0x03</code>).</li>
+                  <li><strong>Service 0x19:</strong> Read DTC Information by status availability mask (<code>0x02 0xFF</code>).</li>
+                  <li><strong>Service 0x04:</strong> Clear Diagnostic Information across all vehicle domains (<code>0xFFFFFF</code>).</li>
+                </ul>
+              </div>
+
+              <div class="doc-card">
+                <h4>SAE J1979 / ELM327 (Emissions OBD2)</h4>
+                <p>Standardized North American emissions protocol communicating via serial/Bluetooth interface (default COM3, 38400 baud). Mode 01 requests live current sensor PIDs; Mode 03 fetches confirmed DTCs.</p>
+              </div>
+            </article>
+
+            <!-- Article 2: Telemetry -->
+            <article class="doc-article" id="doc-telemetry">
+              <h3>Live Dashboard Telemetry</h3>
+              <p>Continuous vehicle operational telemetry polled at 10 Hz through an asynchronous decoupled background polling loop:</p>
+              <table class="doc-table">
+                <thead>
+                  <tr><th>Parameter</th><th>Protocol / DID</th><th>Resolution</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Engine Speed</td><td>UDS / PID 0x0C</td><td>1 RPM</td><td>Crankshaft rotational velocity with redline arc indicator.</td></tr>
+                  <tr><td>Vehicle Speed</td><td>UDS / PID 0x0D</td><td>1 KM/H (MPH)</td><td>Wheel speed sensor telemetry with dynamic units switch.</td></tr>
+                  <tr><td>Coolant Temp</td><td>UDS / PID 0x05</td><td>1 °C</td><td>Engine head coolant sensor (Normal: 85°C - 105°C).</td></tr>
+                  <tr><td>Oil Temp</td><td>UDS DID / GM PID</td><td>1 °C</td><td>Engine oil sump temperature with graceful fallback on unsupported ECUs.</td></tr>
+                </tbody>
+              </table>
+            </article>
+
+            <!-- Article 3: DTCs -->
+            <article class="doc-article" id="doc-dtcs">
+              <h3>Diagnostic Trouble Codes & Status Masks</h3>
+              <p>Fault codes are interrogated using UDS Service <code>0x19 0x02 0xFF</code> across all electronic controllers.</p>
+              <div class="doc-card">
+                <h4>Status Byte Bitmask Breakdown</h4>
+                <ul>
+                  <li><strong>Bit 3 (0x08) - Confirmed DTC:</strong> The fault has been verified during multiple driving cycles and logged permanently.</li>
+                  <li><strong>Bit 2 (0x04) - Pending DTC:</strong> Fault was detected during the current or previous drive cycle but requires further cycle confirmation.</li>
+                  <li><strong>Bit 0 (0x01) - Test Failed:</strong> The diagnostic check failed during the current test execution.</li>
+                </ul>
+              </div>
+              <div class="doc-card">
+                <h4>Clearing Fault Memory</h4>
+                <p>Executing clear fault codes dispatches Service <code>0x04 0xFF 0xFF 0xFF</code>. This erases freeze frames, resets state emissions readiness monitors, and restores fault memory.</p>
+              </div>
+            </article>
+
+            <!-- Article 4: Topology -->
+            <article class="doc-article" id="doc-topology">
+              <h3>ECU Network Topology (ISTA+ Tree View)</h3>
+              <p>Multi-bus controller scan querying 16 distinct Electronic Control Units across 4 vehicle bus architectures:</p>
+              <ul>
+                <li><strong>PT-CAN (Powertrain, 500 kbps):</strong> DME (Engine), EGS (Transmission), DSC (Brakes/ABS), EKPS (Fuel Pump), GWS (Gear Selector).</li>
+                <li><strong>FlexRay (Chassis, 10 Mbps):</strong> EPS (Electric Steering), ICM (Chassis Mgmt), EMF (Parking Brake).</li>
+                <li><strong>K-CAN (Body, 100 kbps):</strong> CAS (Immobilizer), KOMBI (Cluster), IHKA (Climate), FRM (Footwell), JBE (Junction Box), PDC (Parking).</li>
+                <li><strong>Ethernet (Gateway, 100 Mbps):</strong> ZGW (Central Gateway), HU_NBT (Navigation / Infotainment).</li>
+              </ul>
+              <div class="doc-card">
+                <h4>Node Health States</h4>
+                <p><strong>Green (Normal):</strong> Responding normally with 0 DTCs. <br>
+                <strong>Amber (Fault Stored):</strong> Responding normally but has 1 or more persistent fault codes in memory. <br>
+                <strong>Red (Comm Error):</strong> Returned Negative Response Code (NRC) or transmission framing error. <br>
+                <strong>Grey (No Response):</strong> Controller unequipped or failed to answer before timeout.</p>
+              </div>
+            </article>
+
+            <!-- Article 5: Battery & IBS -->
+            <article class="doc-article" id="doc-battery">
+              <h3>Intelligent Battery Sensor (IBS) & Power Management</h3>
+              <p>BMW vehicles utilize a closed-loop micro-controller on the negative battery terminal to calculate state of charge, degradation, and internal resistance.</p>
+              <div class="doc-card">
+                <h4>IBS Telemetry (DID 0xD010)</h4>
+                <ul>
+                  <li><strong>State of Charge (SoC %):</strong> Real-time usable energy percentage.</li>
+                  <li><strong>Terminal Voltage (mV):</strong> Operating voltage (Resting 12.6V, Alternator charging 14.2V - 14.7V).</li>
+                  <li><strong>Net Current (0.1A):</strong> Signed net current into (+) or out of (-) the battery.</li>
+                  <li><strong>Core Temperature (°C):</strong> Battery cell temperature.</li>
+                </ul>
+              </div>
+              <div class="doc-card">
+                <h4>Battery Registration (Routine 0x0219)</h4>
+                <p>When installing a replacement battery, the DME must be informed via Routine <code>0x0219</code>. This:</p>
+                <ol>
+                  <li>Resets the alternator charging curve (as batteries age, the DME increases charging voltage; a new battery will boil and fail prematurely without registration).</li>
+                  <li>Clears internal aging histograms.</li>
+                  <li>Appends the current vehicle odometer into DME DID <code>0x2036</code> history.</li>
+                </ol>
+              </div>
+            </article>
+
+            <!-- Article 6: CBS -->
+            <article class="doc-article" id="doc-cbs">
+              <h3>Condition Based Service (CBS) Monitoring & Reset</h3>
+              <p>Tracks consumable wear and inspection schedules based on driving habits, oil degradation algorithms, and brake pad wear sensors (DID <code>0xD020</code>).</p>
+              <div class="doc-card">
+                <h4>Service Item Target IDs</h4>
+                <ul>
+                  <li><code>0x01</code>: Engine Oil (Tracks mileage and calendar interval).</li>
+                  <li><code>0x02</code>: Front Brake Pads (Tracks two-stage pad wear sensor).</li>
+                  <li><code>0x03</code>: Rear Brake Pads (Tracks rear axle brake wear).</li>
+                  <li><code>0x04</code>: Brake Fluid (2-year mandatory moisture interval).</li>
+                  <li><code>0x05</code>: Vehicle Check / Statutory Inspection.</li>
+                </ul>
+                <p>Executing Routine <code>0x0220</code> with the specific target item ID resets its remaining life to 100% and advances the inspection calendar.</p>
+              </div>
+            </article>
+
+            <!-- Article 7: Actuators -->
+            <article class="doc-article" id="doc-actuators">
+              <h3>BMW Actuator Service Routines</h3>
+              <p>Direct component test actuations and maintenance procedures:</p>
+              <div class="doc-card">
+                <h4>Electric Water Pump Bleed (Routine 0x0211)</h4>
+                <p>Purges trapped air pockets from the N55 cooling system after coolant changes or pump replacement. Runs an automated 12-minute cycle with 4 pulse stages (15% -> 50% -> 85% -> 100%).</p>
+                <p><strong>Prerequisites:</strong> Ignition ON, Engine OFF, coolant reservoir sealed, battery maintainer connected, heater set to 84°F with lowest fan.</p>
+              </div>
+              <div class="doc-card">
+                <h4>ZF 8HP Transmission Fluid Temperature (DID 0x2045 & Routine 0x0225)</h4>
+                <p>Automatic transmission fluid level must be checked only when the sump oil temperature is between <strong>40°C and 50°C</strong>. Routine <code>0x0225</code> commands the EGS to hold torque converter fill RPM during inspection.</p>
+              </div>
+              <div class="doc-card">
+                <h4>Radiator Cooling Fan Test (Routine 0x0215)</h4>
+                <p>Commands the variable-speed electric cooling fan to 15% (Low), 50% (Medium), 90% (High), or restores DME automatic control (0%).</p>
+              </div>
+              <div class="doc-card">
+                <h4>Exhaust Flap Actuator (Routine 0x0218)</h4>
+                <p>Forces the muffler flapper valve open (sport sound) or closed (quiet mode).</p>
+              </div>
+            </article>
+
+            <!-- Article 8: Hardware -->
+            <article class="doc-article" id="doc-hardware">
+              <h3>Hardware Setup & Cable Wiring</h3>
+              <div class="doc-card">
+                <h4>BMW ENET Cable (RJ45-to-OBD2)</h4>
+                <p>Connect your computer Ethernet port to the vehicle OBD2 port using a standard ENET cable.</p>
+                <ul>
+                  <li><strong>Computer IP:</strong> Configure Ethernet adapter to DHCP (Autoconfig 169.254.x.x) or Static IP: <code>169.254.1.2</code>, Subnet: <code>255.255.0.0</code>.</li>
+                  <li><strong>Vehicle IP:</strong> Central Gateway Module responds at <code>169.254.1.1</code> port <code>6801</code>.</li>
+                  <li><strong>Ignition:</strong> Ensure vehicle ignition is in Terminal 15 (KL15 - ignition ON, engine not running).</li>
+                </ul>
+              </div>
+            </article>
           </div>
         </div>
       </section>
@@ -444,6 +761,27 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" id="btnCancelCbsReset">CANCEL</button>
           <button class="btn btn-warning" id="btnConfirmCbsReset">EXECUTE ROUTINE 0x0220</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety Confirmation Modal for Water Pump Bleed -->
+    <div class="modal-overlay" id="waterPumpModal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-icon">💧</div>
+        <h3>CONFIRM ELECTRIC WATER PUMP BLEED</h3>
+        <p class="modal-warn">
+          This initiates the 12-minute automated cooling system bleeding sequence (Routine 0x0211 on DME). The 400W electric coolant pump will pulse at varied duty cycles to extract trapped air pockets.
+        </p>
+        <div class="service-checklist" style="margin: 14px 0;">
+          <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 1:</strong> Ignition ON (Terminal 15), Engine OFF (RPM 0).</div>
+          <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 2:</strong> Battery maintainer connected (12V high current draw).</div>
+          <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 3:</strong> Coolant expansion tank cap fully sealed.</div>
+          <div class="check-item"><span class="check-icon">✓</span> <strong>Requirement 4:</strong> Climate control set to MAX HEAT (84°F) with lowest fan speed.</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCancelBleed">CANCEL</button>
+          <button class="btn btn-primary" id="btnConfirmBleed">START ROUTINE 0x0211</button>
         </div>
       </div>
     </div>

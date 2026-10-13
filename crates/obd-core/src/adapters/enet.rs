@@ -2,7 +2,8 @@ use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
     BatteryStatus, CbsItemType, CbsReport, DtcRecord, EcuHealth, EcuNode, ParameterType,
-    ParameterValue, TopologyScanReport, VehicleProfile,
+    ParameterValue, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
+    WaterPumpBleedStatus,
 };
 use crate::protocols::doip;
 use crate::protocols::uds;
@@ -330,6 +331,114 @@ impl ObdConnection for EnetConnection {
             fault_count,
             nodes,
         })
+    }
+
+    async fn start_water_pump_bleed(&mut self) -> Result<String, ObdError> {
+        self.elevate_to_extended_session().await?;
+        let req = uds::build_start_routine(uds::ROUTINE_BMW_WATER_PUMP_BLEED, &[]);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_WATER_PUMP_BLEED, &resp)?;
+        Ok("Electric water pump automated bleeding sequence initiated (Routine 0x0211 running). Purging air pockets across N55 cooling circuit.".into())
+    }
+
+    async fn stop_water_pump_bleed(&mut self) -> Result<String, ObdError> {
+        self.elevate_to_extended_session().await?;
+        let req = uds::build_stop_routine(uds::ROUTINE_BMW_WATER_PUMP_BLEED);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_WATER_PUMP_BLEED, &resp)?;
+        Ok(
+            "Electric water pump bleeding routine stopped. Normal DME coolant regulation restored."
+                .into(),
+        )
+    }
+
+    async fn get_water_pump_bleed_status(&mut self) -> Result<WaterPumpBleedStatus, ObdError> {
+        let req = uds::build_routine_control_request(
+            uds::ROUTINE_CONTROL_REQUEST_RESULTS,
+            uds::ROUTINE_BMW_WATER_PUMP_BLEED,
+            &[],
+        );
+        if let Ok(resp) = self.send_uds_request(&req).await {
+            if let Ok(data) = uds::parse_routine_response(uds::ROUTINE_BMW_WATER_PUMP_BLEED, &resp)
+            {
+                if !data.is_empty() {
+                    let is_running = data[0] == 0x01;
+                    let progress = data.get(1).copied().unwrap_or(0) as f32;
+                    let speed = data.get(2).copied().unwrap_or(0);
+                    let elapsed = data.get(3).copied().unwrap_or(0) as u32 * 10;
+                    return Ok(WaterPumpBleedStatus {
+                        is_running,
+                        progress_percent: progress.clamp(0.0, 100.0),
+                        pump_speed_percent: speed,
+                        elapsed_seconds: elapsed,
+                        remaining_seconds: 720usize.saturating_sub(elapsed as usize) as u32,
+                        stage_description: if is_running {
+                            "Automated pulsing active".into()
+                        } else {
+                            "Idle / Completed".into()
+                        },
+                    });
+                }
+            }
+        }
+        Ok(WaterPumpBleedStatus::default())
+    }
+
+    async fn get_transmission_oil_status(&mut self) -> Result<TransmissionOilStatus, ObdError> {
+        let req = uds::build_read_did_request(uds::DID_BMW_TRANSMISSION_SUMP_TEMP);
+        // Query EGS directly at address 0x0018
+        let resp = self.send_uds_request_to_ecu(0x0018, &req).await?;
+        let temp_c = uds::parse_transmission_temp_response(&resp)?;
+        let temp_f = (temp_c * 9.0 / 5.0) + 32.0;
+        let is_within_fill_window = temp_c >= 40.0 && temp_c <= 50.0;
+        let status_text = if temp_c < 40.0 {
+            "COLD - Run engine to warm fluid to 40°C - 50°C".into()
+        } else if temp_c <= 50.0 {
+            "OPTIMAL FILL WINDOW (40°C - 50°C) - Ready to check/fill level".into()
+        } else {
+            "OVER-TEMPERATURE (> 50°C) - Allow transmission to cool before filling".into()
+        };
+
+        Ok(TransmissionOilStatus {
+            supported: true,
+            temperature_c: temp_c,
+            temperature_f: temp_f,
+            is_within_fill_window,
+            status_text,
+        })
+    }
+
+    async fn start_transmission_fill_routine(&mut self) -> Result<String, ObdError> {
+        let req = uds::build_start_routine(uds::ROUTINE_BMW_EGS_OIL_LEVEL, &[]);
+        let resp = self.send_uds_request_to_ecu(0x0018, &req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_EGS_OIL_LEVEL, &resp)?;
+        Ok("ZF 8HP fluid level preparation routine initiated on EGS (Routine 0x0225). Verify engine idling in P/N.".into())
+    }
+
+    async fn set_radiator_fan_duty(&mut self, duty_percent: u8) -> Result<String, ObdError> {
+        self.elevate_to_extended_session().await?;
+        let req = uds::build_radiator_fan_request(duty_percent);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_RADIATOR_FAN, &resp)?;
+        if duty_percent == 0 {
+            Ok("Electric cooling fan returned to automatic DME control.".into())
+        } else {
+            Ok(format!(
+                "Electric cooling fan commanded to {duty_percent}% duty cycle."
+            ))
+        }
+    }
+
+    async fn set_exhaust_flap(&mut self, open: bool) -> Result<String, ObdError> {
+        self.elevate_to_extended_session().await?;
+        let req = uds::build_exhaust_flap_request(open);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_EXHAUST_FLAP, &resp)?;
+        if open {
+            Ok("Exhaust flapper valve forced OPEN (Sport sound).".into())
+        } else {
+            Ok("Exhaust flapper valve commanded CLOSED (Quiet sound).".into())
+        }
     }
 
     fn profile(&self) -> VehicleProfile {

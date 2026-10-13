@@ -363,3 +363,63 @@ pub const BMW_F10_ECUS: &[BmwEcuDefinition] = &[
         bus: BusType::Ethernet,
     },
 ];
+
+/// Status of the automated electric water pump coolant bleeding routine (Routine 0x0211).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WaterPumpBleedStatus {
+    pub is_running: bool,
+    pub progress_percent: f32,
+    pub pump_speed_percent: u8,
+    pub elapsed_seconds: u32,
+    pub remaining_seconds: u32,
+    pub stage_description: String,
+}
+
+impl Default for WaterPumpBleedStatus {
+    fn default() -> Self {
+        Self {
+            is_running: false,
+            progress_percent: 0.0,
+            pump_speed_percent: 0,
+            elapsed_seconds: 0,
+            remaining_seconds: 720,
+            stage_description: "Idle / Ready to start".into(),
+        }
+    }
+}
+
+/// ZF 8HP transmission fluid temperature and fill level window assessment (DID 0x2045).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransmissionOilStatus {
+    pub supported: bool,
+    pub temperature_c: f32,
+    pub temperature_f: f32,
+    pub is_within_fill_window: bool, // 40.0°C <= temp <= 50.0°C
+    pub status_text: String,
+}
+
+impl Default for TransmissionOilStatus {
+    fn default() -> Self {
+        Self {
+            supported: false,
+            temperature_c: 0.0,
+            temperature_f: 32.0,
+            is_within_fill_window: false,
+            status_text: "Uninitialized".into(),
+        }
+    }
+}
+
+/// Status of the variable-speed electric radiator cooling fan.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RadiatorFanStatus {
+    pub active_duty_percent: u8,
+    pub is_overridden: bool,
+}
+
+/// Status of the muffler exhaust flapper valve.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExhaustFlapStatus {
+    pub is_open: bool,
+    pub is_overridden: bool,
+}

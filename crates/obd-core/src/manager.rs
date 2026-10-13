@@ -174,4 +174,53 @@ impl VehicleManager {
         let mut conn = self.connection.lock().await;
         conn.scan_ecu_topology().await
     }
+
+    /// Starts the automated electric water pump coolant bleeding routine (Routine 0x0211 on DME).
+    pub async fn start_water_pump_bleed(&self) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.start_water_pump_bleed().await
+    }
+
+    /// Stops / cancels the electric water pump coolant bleeding routine.
+    pub async fn stop_water_pump_bleed(&self) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.stop_water_pump_bleed().await
+    }
+
+    /// Queries live status and progress of the electric water pump bleeding routine.
+    pub async fn get_water_pump_bleed_status(
+        &self,
+    ) -> Result<crate::profile::WaterPumpBleedStatus, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.get_water_pump_bleed_status().await
+    }
+
+    /// Queries ZF 8HP transmission fluid sump temperature and fill level window assessment.
+    pub async fn get_transmission_oil_status(
+        &self,
+    ) -> Result<crate::profile::TransmissionOilStatus, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.get_transmission_oil_status().await
+    }
+
+    /// Executes ZF 8HP transmission fluid level check routine (Routine 0x0225 on EGS).
+    pub async fn start_transmission_fill_routine(&self) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.start_transmission_fill_routine().await
+    }
+
+    /// Sets radiator electric cooling fan test duty percent (Routine 0x0215: 0, 15, 50, 90).
+    pub async fn set_radiator_fan_duty(
+        &self,
+        duty_percent: u8,
+    ) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.set_radiator_fan_duty(duty_percent).await
+    }
+
+    /// Sets muffler exhaust flap actuator state (Routine 0x0218: true = open, false = closed).
+    pub async fn set_exhaust_flap(&self, open: bool) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.set_exhaust_flap(open).await
+    }
 }

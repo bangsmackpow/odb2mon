@@ -77,6 +77,37 @@ function initApp() {
   const ecuModalDtcList = document.getElementById('ecuModalDtcList');
   const btnCloseEcuModal = document.getElementById('btnCloseEcuModal');
 
+  // Actuators References
+  const btnStartBleed = document.getElementById('btnStartBleed');
+  const btnStopBleed = document.getElementById('btnStopBleed');
+  const bleedProgressFill = document.getElementById('bleedProgressFill');
+  const bleedProgressVal = document.getElementById('bleedProgressVal');
+  const bleedStageName = document.getElementById('bleedStageName');
+  const bleedPumpSpeed = document.getElementById('bleedPumpSpeed');
+  const bleedElapsed = document.getElementById('bleedElapsed');
+  const bleedRemaining = document.getElementById('bleedRemaining');
+  const bleedStatusText = document.getElementById('bleedStatusText');
+  const waterPumpModal = document.getElementById('waterPumpModal');
+  const btnCancelBleed = document.getElementById('btnCancelBleed');
+  const btnConfirmBleed = document.getElementById('btnConfirmBleed');
+
+  const transTempC = document.getElementById('transTempC');
+  const transTempF = document.getElementById('transTempF');
+  const transWindowBadge = document.getElementById('transWindowBadge');
+  const transStatusMsg = document.getElementById('transStatusMsg');
+  const btnStartTransFill = document.getElementById('btnStartTransFill');
+  const transRoutineStatus = document.getElementById('transRoutineStatus');
+
+  const fanDutyVal = document.getElementById('fanDutyVal');
+  const fanStatusText = document.getElementById('fanStatusText');
+  const btnFanSteps = document.querySelectorAll('.btn-fan-step');
+
+  const flapStateVal = document.getElementById('flapStateVal');
+  const flapStatusText = document.getElementById('flapStatusText');
+  const btnOpenFlap = document.getElementById('btnOpenFlap');
+  const btnCloseFlap = document.getElementById('btnCloseFlap');
+  const btnRefreshActuators = document.getElementById('btnRefreshActuators');
+
   // Navigation Tab Switching
   navButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -98,6 +129,7 @@ function initApp() {
       if (targetPage === 'service') {
         fetchBatteryStatus();
         fetchCbsReport();
+        fetchActuatorsStatus();
       }
     });
   });
@@ -839,6 +871,184 @@ function initApp() {
 
   window.addEventListener('click', (e) => {
     if (e.target === ecuNodeModal) ecuNodeModal.style.display = 'none';
+    if (e.target === waterPumpModal) waterPumpModal.style.display = 'none';
+  });
+
+  // ----------------------------------------------------
+  // BMW Actuator Service Routines
+  // ----------------------------------------------------
+  let bleedPollInterval = null;
+
+  async function fetchActuatorsStatus() {
+    await fetchWaterPumpStatus();
+    await fetchTransmissionStatus();
+  }
+
+  async function fetchWaterPumpStatus() {
+    try {
+      const status = await callBackend('get_water_pump_bleed_status');
+      if (!status) return;
+
+      if (bleedProgressFill) bleedProgressFill.style.width = `${status.progress_percent}%`;
+      if (bleedProgressVal) bleedProgressVal.innerText = `${Math.round(status.progress_percent)}%`;
+      if (bleedStageName) bleedStageName.innerText = status.stage_description;
+      if (bleedPumpSpeed) bleedPumpSpeed.innerText = `${status.pump_speed_percent}% PWM`;
+      if (bleedElapsed) bleedElapsed.innerText = `${status.elapsed_seconds}s`;
+
+      const remMin = Math.floor(status.remaining_seconds / 60);
+      const remSec = status.remaining_seconds % 60;
+      if (bleedRemaining) bleedRemaining.innerText = `${remMin}m ${remSec.toString().padStart(2, '0')}s`;
+
+      if (status.is_running) {
+        if (btnStartBleed) btnStartBleed.style.display = 'none';
+        if (btnStopBleed) btnStopBleed.style.display = 'inline-block';
+        if (!bleedPollInterval) {
+          bleedPollInterval = setInterval(fetchWaterPumpStatus, 1000);
+        }
+      } else {
+        if (btnStartBleed) btnStartBleed.style.display = 'inline-block';
+        if (btnStopBleed) btnStopBleed.style.display = 'none';
+        if (bleedPollInterval) {
+          clearInterval(bleedPollInterval);
+          bleedPollInterval = null;
+        }
+      }
+    } catch (_) {}
+  }
+
+  async function fetchTransmissionStatus() {
+    try {
+      const status = await callBackend('get_transmission_oil_status');
+      if (!status || !status.supported) return;
+
+      if (transTempC) transTempC.innerText = `${status.temperature_c.toFixed(1)} °C`;
+      if (transTempF) transTempF.innerText = `(${status.temperature_f.toFixed(1)} °F)`;
+      if (transStatusMsg) transStatusMsg.innerText = status.status_text;
+
+      if (transWindowBadge) {
+        if (status.temperature_c < 40.0) {
+          transWindowBadge.innerText = 'COLD (<40°C)';
+          transWindowBadge.className = 'trans-window-badge cold';
+        } else if (status.temperature_c <= 50.0) {
+          transWindowBadge.innerText = 'OPTIMAL FILL WINDOW (40-50°C)';
+          transWindowBadge.className = 'trans-window-badge target';
+        } else {
+          transWindowBadge.innerText = 'TOO HOT (>50°C)';
+          transWindowBadge.className = 'trans-window-badge hot';
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (btnStartBleed) {
+    btnStartBleed.addEventListener('click', () => {
+      if (waterPumpModal) waterPumpModal.style.display = 'flex';
+    });
+  }
+
+  if (btnCancelBleed) {
+    btnCancelBleed.addEventListener('click', () => {
+      if (waterPumpModal) waterPumpModal.style.display = 'none';
+    });
+  }
+
+  if (btnConfirmBleed) {
+    btnConfirmBleed.addEventListener('click', async () => {
+      if (waterPumpModal) waterPumpModal.style.display = 'none';
+      try {
+        const msg = await callBackend('start_water_pump_bleed');
+        if (bleedStatusText) bleedStatusText.innerText = msg;
+        await fetchWaterPumpStatus();
+      } catch (err) {
+        alert('Failed to start water pump bleed routine: ' + err);
+      }
+    });
+  }
+
+  if (btnStopBleed) {
+    btnStopBleed.addEventListener('click', async () => {
+      try {
+        const msg = await callBackend('stop_water_pump_bleed');
+        if (bleedStatusText) bleedStatusText.innerText = msg;
+        await fetchWaterPumpStatus();
+      } catch (err) {
+        alert('Failed to stop water pump bleed: ' + err);
+      }
+    });
+  }
+
+  if (btnStartTransFill) {
+    btnStartTransFill.addEventListener('click', async () => {
+      try {
+        const msg = await callBackend('start_transmission_fill_routine');
+        if (transRoutineStatus) transRoutineStatus.innerText = msg;
+        await fetchTransmissionStatus();
+      } catch (err) {
+        alert('Failed to execute transmission level routine: ' + err);
+      }
+    });
+  }
+
+  btnFanSteps.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const duty = parseInt(btn.dataset.duty, 10);
+      try {
+        const msg = await callBackend('set_radiator_fan_duty', { dutyPercent: duty });
+        if (fanDutyVal) {
+          fanDutyVal.innerText = duty === 0 ? 'AUTO (DME CONTROL)' : `FORCED ${duty}% PWM`;
+        }
+        if (fanStatusText) fanStatusText.innerText = msg;
+      } catch (err) {
+        alert('Failed to command fan speed: ' + err);
+      }
+    });
+  });
+
+  if (btnOpenFlap) {
+    btnOpenFlap.addEventListener('click', async () => {
+      try {
+        const msg = await callBackend('set_exhaust_flap', { open: true });
+        if (flapStateVal) flapStateVal.innerText = 'OPEN (SPORT SOUND)';
+        if (flapStatusText) flapStatusText.innerText = msg;
+      } catch (err) {
+        alert('Failed to actuate exhaust flap: ' + err);
+      }
+    });
+  }
+
+  if (btnCloseFlap) {
+    btnCloseFlap.addEventListener('click', async () => {
+      try {
+        const msg = await callBackend('set_exhaust_flap', { open: false });
+        if (flapStateVal) flapStateVal.innerText = 'CLOSED (QUIET MODE)';
+        if (flapStatusText) flapStatusText.innerText = msg;
+      } catch (err) {
+        alert('Failed to actuate exhaust flap: ' + err);
+      }
+    });
+  }
+
+  if (btnRefreshActuators) {
+    btnRefreshActuators.addEventListener('click', () => {
+      fetchActuatorsStatus();
+    });
+  }
+
+  // Documentation Sidebar Navigation
+  const docLinks = document.querySelectorAll('.doc-link');
+  const docArticles = document.querySelectorAll('.doc-article');
+  docLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      const docId = link.dataset.doc;
+      if (!docId) return;
+      docLinks.forEach(l => l.classList.remove('active'));
+      docArticles.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+      const targetArticle = document.getElementById(`doc-${docId}`);
+      if (targetArticle) {
+        targetArticle.classList.add('active');
+      }
+    });
   });
 
   // Event Push Listener

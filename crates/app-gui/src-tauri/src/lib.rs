@@ -1,7 +1,8 @@
 use obd_core::{
     check_for_updates, BatteryStatus, BluetoothConnection, CbsItemType, CbsReport,
     DashboardSnapshot, DtcRecord, EnetConnection, MockConnection, ObdConnection,
-    TopologyScanReport, UpdateInfo, VehicleManager, VehicleProfile,
+    TopologyScanReport, TransmissionOilStatus, UpdateInfo, VehicleManager, VehicleProfile,
+    WaterPumpBleedStatus,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -136,6 +137,65 @@ async fn scan_topology(state: State<'_, AppState>) -> Result<TopologyScanReport,
     mgr.scan_ecu_topology().await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn start_water_pump_bleed(state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.start_water_pump_bleed()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn stop_water_pump_bleed(state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.stop_water_pump_bleed().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_water_pump_bleed_status(
+    state: State<'_, AppState>,
+) -> Result<WaterPumpBleedStatus, String> {
+    let mgr = state.manager.lock().await;
+    mgr.get_water_pump_bleed_status()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_transmission_oil_status(
+    state: State<'_, AppState>,
+) -> Result<TransmissionOilStatus, String> {
+    let mgr = state.manager.lock().await;
+    mgr.get_transmission_oil_status()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn start_transmission_fill_routine(state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.start_transmission_fill_routine()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_radiator_fan_duty(
+    duty_percent: u8,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.set_radiator_fan_duty(duty_percent)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn set_exhaust_flap(open: bool, state: State<'_, AppState>) -> Result<String, String> {
+    let mgr = state.manager.lock().await;
+    mgr.set_exhaust_flap(open).await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Default initial connection to realistic simulator
@@ -160,7 +220,14 @@ pub fn run() {
             register_battery,
             get_cbs_report,
             reset_cbs,
-            scan_topology
+            scan_topology,
+            start_water_pump_bleed,
+            stop_water_pump_bleed,
+            get_water_pump_bleed_status,
+            get_transmission_oil_status,
+            start_transmission_fill_routine,
+            set_radiator_fan_duty,
+            set_exhaust_flap
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {

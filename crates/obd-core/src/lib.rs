@@ -15,7 +15,8 @@ pub use error::ObdError;
 pub use manager::VehicleManager;
 pub use profile::{
     BatteryStatus, BmwEcuDefinition, BusType, CbsItem, CbsItemType, CbsReport, CbsStatus,
-    DashboardSnapshot, DtcRecord, DtcStatus, EcuHealth, EcuNode, ParameterType, ParameterValue,
-    TopologyScanReport, VehicleProfile, BMW_F10_ECUS,
+    DashboardSnapshot, DtcRecord, DtcStatus, EcuHealth, EcuNode, ExhaustFlapStatus, ParameterType,
+    ParameterValue, RadiatorFanStatus, TopologyScanReport, TransmissionOilStatus, VehicleProfile,
+    WaterPumpBleedStatus, BMW_F10_ECUS,
 };
 pub use updater::{check_for_updates, parse_clean_semver, UpdateInfo};

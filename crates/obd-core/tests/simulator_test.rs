@@ -241,3 +241,79 @@ async fn test_gmc_topology_scan_unsupported() {
     let err = conn.scan_ecu_topology().await.unwrap_err();
     assert!(matches!(err, obd_core::ObdError::Unsupported(_)));
 }
+
+#[tokio::test]
+async fn test_bmw_water_pump_bleed_cycle() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    // Verify initial idle state
+    let initial_status = conn.get_water_pump_bleed_status().await.unwrap();
+    assert!(!initial_status.is_running);
+
+    // Start bleed routine
+    let start_msg = conn.start_water_pump_bleed().await.unwrap();
+    assert!(start_msg.contains("0x0211"));
+
+    // Query running status
+    let running_status = conn.get_water_pump_bleed_status().await.unwrap();
+    assert!(running_status.is_running);
+    assert!(running_status.pump_speed_percent > 0);
+
+    // Stop routine
+    let stop_msg = conn.stop_water_pump_bleed().await.unwrap();
+    assert!(stop_msg.contains("stopped"));
+
+    let stopped_status = conn.get_water_pump_bleed_status().await.unwrap();
+    assert!(!stopped_status.is_running);
+}
+
+#[tokio::test]
+async fn test_bmw_transmission_temp_and_fill() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    let oil_status = conn.get_transmission_oil_status().await.unwrap();
+    assert!(oil_status.supported);
+    assert!(oil_status.temperature_c >= 40.0 && oil_status.temperature_c <= 50.0);
+    assert!(oil_status.is_within_fill_window);
+
+    let fill_msg = conn.start_transmission_fill_routine().await.unwrap();
+    assert!(fill_msg.contains("0x0225"));
+}
+
+#[tokio::test]
+async fn test_bmw_fan_and_exhaust_flap_actuators() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    let fan_msg = conn.set_radiator_fan_duty(50).await.unwrap();
+    assert!(fan_msg.contains("50%"));
+
+    let fan_off_msg = conn.set_radiator_fan_duty(0).await.unwrap();
+    assert!(fan_off_msg.contains("returned to automatic"));
+
+    let flap_open_msg = conn.set_exhaust_flap(true).await.unwrap();
+    assert!(flap_open_msg.contains("OPEN"));
+
+    let flap_close_msg = conn.set_exhaust_flap(false).await.unwrap();
+    assert!(flap_close_msg.contains("CLOSED"));
+}
+
+#[tokio::test]
+async fn test_gmc_actuators_unsupported() {
+    let mut conn = MockConnection::new(VehicleProfile::GmcAcadia_2010);
+    conn.connect().await.unwrap();
+
+    let bleed_err = conn.start_water_pump_bleed().await.unwrap_err();
+    assert!(matches!(bleed_err, obd_core::ObdError::Unsupported(_)));
+
+    let trans_err = conn.get_transmission_oil_status().await.unwrap_err();
+    assert!(matches!(trans_err, obd_core::ObdError::Unsupported(_)));
+
+    let fan_err = conn.set_radiator_fan_duty(50).await.unwrap_err();
+    assert!(matches!(fan_err, obd_core::ObdError::Unsupported(_)));
+
+    let flap_err = conn.set_exhaust_flap(true).await.unwrap_err();
+    assert!(matches!(flap_err, obd_core::ObdError::Unsupported(_)));
+}

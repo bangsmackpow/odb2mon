@@ -12,11 +12,17 @@ pub const ROUTINE_CONTROL_REQUEST_RESULTS: u8 = 0x03;
 /// BMW Standard Routine Identifiers
 pub const ROUTINE_BMW_BATTERY_REGISTRATION: u16 = 0x0219;
 pub const ROUTINE_BMW_CBS_RESET: u16 = 0x0220;
+pub const ROUTINE_BMW_WATER_PUMP_BLEED: u16 = 0x0211;
+pub const ROUTINE_BMW_RADIATOR_FAN: u16 = 0x0215;
+pub const ROUTINE_BMW_EXHAUST_FLAP: u16 = 0x0218;
+pub const ROUTINE_BMW_EGS_OIL_LEVEL: u16 = 0x0225;
 
 /// BMW Standard Diagnostic Identifiers (DIDs)
 pub const DID_BMW_IBS_TELEMETRY: u16 = 0xD010;
 pub const DID_BMW_BATTERY_HISTORY: u16 = 0x2036;
 pub const DID_BMW_CBS_OVERVIEW: u16 = 0xD020;
+pub const DID_BMW_WATER_PUMP_STATUS: u16 = 0x2042;
+pub const DID_BMW_TRANSMISSION_SUMP_TEMP: u16 = 0x2045;
 
 /// Builds UDS Service 0x22 ReadDataByIdentifier request frame.
 pub fn build_read_did_request(did: u16) -> Vec<u8> {
@@ -55,6 +61,54 @@ pub fn build_routine_control_request(
 /// Convenience helper to start a routine (0x31 0x01 <routine_id>).
 pub fn build_start_routine(routine_id: u16, option_record: &[u8]) -> Vec<u8> {
     build_routine_control_request(ROUTINE_CONTROL_START, routine_id, option_record)
+}
+
+/// Convenience helper to stop a routine (0x31 0x02 <routine_id>).
+pub fn build_stop_routine(routine_id: u16) -> Vec<u8> {
+    build_routine_control_request(ROUTINE_CONTROL_STOP, routine_id, &[])
+}
+
+/// Builds Radiator Fan Actuator request (Routine 0x0215).
+/// Duty percent: 0 (Off/Auto), 15 (Low), 50 (Med), 90 (High).
+pub fn build_radiator_fan_request(duty: u8) -> Vec<u8> {
+    build_start_routine(ROUTINE_BMW_RADIATOR_FAN, &[duty])
+}
+
+/// Builds Exhaust Flap Actuator request (Routine 0x0218).
+/// Open: true (0x01), Closed: false (0x00).
+pub fn build_exhaust_flap_request(open: bool) -> Vec<u8> {
+    let state = if open { 0x01 } else { 0x00 };
+    build_start_routine(ROUTINE_BMW_EXHAUST_FLAP, &[state])
+}
+
+/// Parses Transmission Sump Fluid Temperature from DID 0x2045 response payload.
+pub fn parse_transmission_temp_response(payload: &[u8]) -> Result<f32, ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError(
+            "Empty transmission temperature payload".into(),
+        ));
+    }
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x22),
+            nrc,
+        ));
+    }
+    if payload[0] != 0x62 {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected response SID: {:#04X}, expected 0x62",
+            payload[0]
+        )));
+    }
+    if payload.len() < 4 {
+        return Err(ObdError::ParseError(
+            "Transmission temperature response truncated".into(),
+        ));
+    }
+    let raw_temp = payload[3];
+    let temp_c = (raw_temp as f32) - 40.0;
+    Ok(temp_c)
 }
 
 /// Parses UDS Service 0x31 response frame.

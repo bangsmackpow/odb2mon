@@ -2,7 +2,8 @@ use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
     BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, EcuHealth,
-    EcuNode, ParameterType, ParameterValue, TopologyScanReport, VehicleProfile, BMW_F10_ECUS,
+    EcuNode, ParameterType, ParameterValue, TopologyScanReport, TransmissionOilStatus,
+    VehicleProfile, WaterPumpBleedStatus, BMW_F10_ECUS,
 };
 use async_trait::async_trait;
 use std::time::Instant;
@@ -16,6 +17,11 @@ pub struct MockConnection {
     battery_history: Vec<u32>,
     battery_soc: f32,
     cbs_items: Vec<CbsItem>,
+    water_pump_bleed_start: Option<Instant>,
+    water_pump_bleed_stopped: bool,
+    trans_fluid_temp_c: f32,
+    fan_duty_percent: u8,
+    exhaust_flap_open: bool,
 }
 
 impl MockConnection {
@@ -130,6 +136,11 @@ impl MockConnection {
             battery_history,
             battery_soc,
             cbs_items,
+            water_pump_bleed_start: None,
+            water_pump_bleed_stopped: false,
+            trans_fluid_temp_c: 44.5,
+            fan_duty_percent: 0,
+            exhaust_flap_open: false,
         }
     }
 }
@@ -376,6 +387,198 @@ impl ObdConnection for MockConnection {
             }
             VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
                 "ECU network topology scan is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn start_water_pump_bleed(&mut self) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                self.water_pump_bleed_start = Some(Instant::now());
+                self.water_pump_bleed_stopped = false;
+                Ok("Electric water pump automated bleeding sequence initiated (Simulated Routine 0x0211 running). Purging air pockets across N55 cooling circuit.".into())
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Electric water pump bleeding routine is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn stop_water_pump_bleed(&mut self) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                self.water_pump_bleed_start = None;
+                self.water_pump_bleed_stopped = true;
+                Ok("Electric water pump bleeding routine stopped. Normal DME coolant regulation restored.".into())
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Electric water pump bleeding routine is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn get_water_pump_bleed_status(&mut self) -> Result<WaterPumpBleedStatus, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                if let Some(start) = self.water_pump_bleed_start {
+                    if !self.water_pump_bleed_stopped {
+                        let elapsed_sec = start.elapsed().as_secs() as u32;
+                        let demo_duration = 60u32;
+                        if elapsed_sec >= demo_duration {
+                            return Ok(WaterPumpBleedStatus {
+                                is_running: false,
+                                progress_percent: 100.0,
+                                pump_speed_percent: 0,
+                                elapsed_seconds: demo_duration,
+                                remaining_seconds: 0,
+                                stage_description: "Bleeding cycle complete. Air pockets purged."
+                                    .into(),
+                            });
+                        }
+
+                        let progress_percent = (elapsed_sec as f32 / demo_duration as f32) * 100.0;
+                        let remaining_seconds = demo_duration.saturating_sub(elapsed_sec);
+
+                        let (pump_speed_percent, stage_description) = if elapsed_sec < 10 {
+                            (15, "Stage 1: Priming & bubble extraction (15% PWM)".into())
+                        } else if elapsed_sec < 25 {
+                            (
+                                50,
+                                "Stage 2: Intermediate coolant displacement (50% PWM)".into(),
+                            )
+                        } else if elapsed_sec < 45 {
+                            (
+                                85,
+                                "Stage 3: High-velocity air pocket purge (85% PWM)".into(),
+                            )
+                        } else {
+                            (
+                                100,
+                                "Stage 4: Maximum flow & thermal equalization (100% PWM)".into(),
+                            )
+                        };
+
+                        return Ok(WaterPumpBleedStatus {
+                            is_running: true,
+                            progress_percent,
+                            pump_speed_percent,
+                            elapsed_seconds: elapsed_sec,
+                            remaining_seconds,
+                            stage_description,
+                        });
+                    }
+                }
+
+                if self.water_pump_bleed_stopped {
+                    Ok(WaterPumpBleedStatus {
+                        is_running: false,
+                        progress_percent: 0.0,
+                        pump_speed_percent: 0,
+                        elapsed_seconds: 0,
+                        remaining_seconds: 720,
+                        stage_description: "Cancelled / Stopped by technician".into(),
+                    })
+                } else {
+                    Ok(WaterPumpBleedStatus::default())
+                }
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Electric water pump bleeding routine is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn get_transmission_oil_status(&mut self) -> Result<TransmissionOilStatus, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                let temp_c = self.trans_fluid_temp_c;
+                let temp_f = (temp_c * 9.0 / 5.0) + 32.0;
+                let is_within_fill_window = temp_c >= 40.0 && temp_c <= 50.0;
+                let status_text = if temp_c < 40.0 {
+                    "COLD - Run engine to warm fluid to 40°C - 50°C".into()
+                } else if temp_c <= 50.0 {
+                    "OPTIMAL FILL WINDOW (40°C - 50°C) - Ready to check/fill level".into()
+                } else {
+                    "OVER-TEMPERATURE (> 50°C) - Allow transmission to cool before filling".into()
+                };
+
+                Ok(TransmissionOilStatus {
+                    supported: true,
+                    temperature_c: temp_c,
+                    temperature_f: temp_f,
+                    is_within_fill_window,
+                    status_text,
+                })
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Transmission fluid temperature is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn start_transmission_fill_routine(&mut self) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                self.trans_fluid_temp_c = 44.5;
+                Ok("ZF 8HP fluid level preparation routine initiated on EGS (Simulated Routine 0x0225). Holding torque converter fill RPM.".into())
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Transmission fill routine is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn set_radiator_fan_duty(&mut self, duty_percent: u8) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                self.fan_duty_percent = duty_percent;
+                if duty_percent == 0 {
+                    Ok("Electric cooling fan returned to automatic DME control.".into())
+                } else {
+                    Ok(format!(
+                        "Electric cooling fan commanded to {duty_percent}% duty cycle."
+                    ))
+                }
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Radiator fan actuator is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn set_exhaust_flap(&mut self, open: bool) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                self.exhaust_flap_open = open;
+                if open {
+                    Ok("Exhaust flapper valve forced OPEN (Sport sound).".into())
+                } else {
+                    Ok("Exhaust flapper valve commanded CLOSED (Quiet sound).".into())
+                }
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "Exhaust flap actuator is only supported on BMW UDS profiles".into(),
             )),
         }
     }
