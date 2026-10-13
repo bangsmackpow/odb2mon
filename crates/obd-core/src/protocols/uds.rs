@@ -1,5 +1,8 @@
 use crate::error::ObdError;
-use crate::profile::{BatteryStatus, DtcRecord, DtcStatus, ParameterType, ParameterValue};
+use crate::profile::{
+    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, ParameterType,
+    ParameterValue,
+};
 
 /// UDS Service 0x31 RoutineControl subfunctions
 pub const ROUTINE_CONTROL_START: u8 = 0x01;
@@ -8,6 +11,12 @@ pub const ROUTINE_CONTROL_REQUEST_RESULTS: u8 = 0x03;
 
 /// BMW Standard Routine Identifiers
 pub const ROUTINE_BMW_BATTERY_REGISTRATION: u16 = 0x0219;
+pub const ROUTINE_BMW_CBS_RESET: u16 = 0x0220;
+
+/// BMW Standard Diagnostic Identifiers (DIDs)
+pub const DID_BMW_IBS_TELEMETRY: u16 = 0xD010;
+pub const DID_BMW_BATTERY_HISTORY: u16 = 0x2036;
+pub const DID_BMW_CBS_OVERVIEW: u16 = 0xD020;
 
 /// Builds UDS Service 0x22 ReadDataByIdentifier request frame.
 pub fn build_read_did_request(did: u16) -> Vec<u8> {
@@ -209,6 +218,96 @@ pub fn parse_battery_history_response(payload: &[u8]) -> Result<Vec<u32>, ObdErr
     }
 
     Ok(history)
+}
+
+/// Builds UDS Service 0x31 request to reset a BMW Condition Based Service (CBS) item.
+pub fn build_cbs_reset_routine(item_type: CbsItemType) -> Vec<u8> {
+    build_start_routine(ROUTINE_BMW_CBS_RESET, &[item_type.id_byte()])
+}
+
+/// Parses UDS Service 0x22 response payload for BMW Condition Based Service (CBS) overview (DID 0xD020).
+pub fn parse_cbs_report_response(expected_did: u16, payload: &[u8]) -> Result<CbsReport, ObdError> {
+    if payload.is_empty() {
+        return Err(ObdError::ParseError("Empty CBS payload".into()));
+    }
+
+    if payload[0] == 0x7F {
+        let nrc = payload.get(2).copied().unwrap_or(0x10);
+        return Err(ObdError::from_nrc(
+            payload.get(1).copied().unwrap_or(0x22),
+            nrc,
+        ));
+    }
+
+    if payload[0] != 0x62 {
+        return Err(ObdError::Protocol(format!(
+            "Unexpected response SID: {:#04X}, expected 0x62",
+            payload[0]
+        )));
+    }
+
+    if payload.len() < 3 {
+        return Err(ObdError::ParseError("CBS response truncated".into()));
+    }
+
+    let returned_did = u16::from_be_bytes([payload[1], payload[2]]);
+    if returned_did != expected_did {
+        return Err(ObdError::Protocol(format!(
+            "DID mismatch: expected {expected_did:#04X}, received {returned_did:#04X}"
+        )));
+    }
+
+    let data = &payload[3..];
+    let mut items = Vec::new();
+
+    // Each CBS record is 8 bytes
+    for chunk in data.as_chunks::<8>().0 {
+        if let Some(item_type) = CbsItemType::from_id_byte(chunk[0]) {
+            let status = match chunk[1] {
+                0x00 => CbsStatus::Ok,
+                0x01 => CbsStatus::Warning,
+                _ => CbsStatus::Overdue,
+            };
+
+            let remaining_percent = (chunk[2] as f32).clamp(0.0, 100.0);
+
+            let km_raw = u16::from_be_bytes([chunk[3], chunk[4]]);
+            let remaining_km = if km_raw == 0xFFFF {
+                None
+            } else {
+                Some((km_raw as i32) * 10)
+            };
+
+            let due_month = chunk[5];
+            let due_year_offset = chunk[6];
+            let due_date = if due_month > 0 && due_year_offset > 0 {
+                Some(format!(
+                    "{:02}/{:04}",
+                    due_month,
+                    2000 + due_year_offset as u32
+                ))
+            } else {
+                None
+            };
+
+            let reset_count = chunk[7] as u32;
+
+            items.push(CbsItem {
+                name: item_type.display_name().to_string(),
+                item_type,
+                status,
+                remaining_percent,
+                remaining_km,
+                due_date,
+                reset_count,
+            });
+        }
+    }
+
+    Ok(CbsReport {
+        supported: true,
+        items,
+    })
 }
 
 /// Parses UDS Service 0x22 response frame.
@@ -459,5 +558,44 @@ mod tests {
         ];
         let history = parse_battery_history_response(&payload).unwrap();
         assert_eq!(history, vec![142300, 78100]);
+    }
+
+    #[test]
+    fn test_cbs_reset_routine_build() {
+        let req = build_cbs_reset_routine(CbsItemType::EngineOil);
+        assert_eq!(req, vec![0x31, 0x01, 0x02, 0x20, 0x01]);
+
+        let req_rear_brakes = build_cbs_reset_routine(CbsItemType::RearBrakes);
+        assert_eq!(req_rear_brakes, vec![0x31, 0x01, 0x02, 0x20, 0x03]);
+    }
+
+    #[test]
+    fn test_parse_cbs_report() {
+        // Positive response 0x62, DID 0xD020:
+        // Record 1 (Engine Oil): ID 0x01, Status 0x00 (Ok), 45% (0x2D), 620 (*10 = 6,200 km: 0x02, 0x6C), Month 11, Year 26 (2026), Counter 3
+        // Record 2 (Rear Brakes): ID 0x03, Status 0x01 (Warning), 15% (0x0F), 310 (*10 = 3,100 km: 0x01, 0x36), Month 0, Year 0, Counter 1
+        let payload = [
+            0x62, 0xD0, 0x20, 0x01, 0x00, 0x2D, 0x02, 0x6C, 11, 26, 3, 0x03, 0x01, 0x0F, 0x01,
+            0x36, 0, 0, 1,
+        ];
+        let report = parse_cbs_report_response(0xD020, &payload).unwrap();
+        assert!(report.supported);
+        assert_eq!(report.items.len(), 2);
+
+        let oil = &report.items[0];
+        assert_eq!(oil.item_type, CbsItemType::EngineOil);
+        assert_eq!(oil.status, CbsStatus::Ok);
+        assert_eq!(oil.remaining_percent, 45.0);
+        assert_eq!(oil.remaining_km, Some(6200));
+        assert_eq!(oil.due_date, Some("11/2026".into()));
+        assert_eq!(oil.reset_count, 3);
+
+        let rear_brakes = &report.items[1];
+        assert_eq!(rear_brakes.item_type, CbsItemType::RearBrakes);
+        assert_eq!(rear_brakes.status, CbsStatus::Warning);
+        assert_eq!(rear_brakes.remaining_percent, 15.0);
+        assert_eq!(rear_brakes.remaining_km, Some(3100));
+        assert_eq!(rear_brakes.due_date, None);
+        assert_eq!(rear_brakes.reset_count, 1);
     }
 }

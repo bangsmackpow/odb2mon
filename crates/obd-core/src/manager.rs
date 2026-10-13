@@ -149,4 +149,21 @@ impl VehicleManager {
         let mut conn = self.connection.lock().await;
         conn.register_battery_replacement().await
     }
+
+    /// Queries Condition Based Service (CBS) maintenance intervals and item health.
+    pub async fn read_cbs_report(
+        &self,
+    ) -> Result<crate::profile::CbsReport, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.read_cbs_report().await
+    }
+
+    /// Resets an individual Condition Based Service (CBS) item routine.
+    pub async fn reset_cbs_item(
+        &self,
+        item: crate::profile::CbsItemType,
+    ) -> Result<String, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.reset_cbs_item(item).await
+    }
 }

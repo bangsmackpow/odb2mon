@@ -72,6 +72,7 @@ function initApp() {
       }
       if (targetPage === 'service') {
         fetchBatteryStatus();
+        fetchCbsReport();
       }
     });
   });
@@ -459,6 +460,159 @@ function initApp() {
         if (batteryModal) batteryModal.style.display = 'none';
         if (batteryRegStatus) batteryRegStatus.innerText = 'Error: ' + err;
         alert('Failed to register battery: ' + err);
+      }
+    });
+  }
+
+  // Condition Based Service (CBS) Controller
+  const cbsItemsGrid = document.getElementById('cbsItemsGrid');
+  const btnRefreshCbs = document.getElementById('btnRefreshCbs');
+  const cbsModal = document.getElementById('cbsModal');
+  const cbsModalItemText = document.getElementById('cbsModalItemText');
+  const btnCancelCbsReset = document.getElementById('btnCancelCbsReset');
+  const btnConfirmCbsReset = document.getElementById('btnConfirmCbsReset');
+  let currentCbsResetItem = null;
+
+  function getItemIcon(itemType) {
+    switch (itemType) {
+      case 'engine_oil': return '🛢️';
+      case 'front_brakes': return '🛑';
+      case 'rear_brakes': return '🛑';
+      case 'brake_fluid': return '💧';
+      case 'vehicle_check': return '🔍';
+      case 'spark_plugs': return '⚡';
+      default: return '🔧';
+    }
+  }
+
+  async function fetchCbsReport() {
+    if (!cbsItemsGrid) return;
+    try {
+      const report = await callBackend('get_cbs_report');
+      if (!report || !report.supported || !report.items) {
+        cbsItemsGrid.innerHTML = `
+          <div class="cbs-card" style="grid-column: 1 / -1; text-align: center; color: var(--text-muted);">
+            CBS monitoring is only supported on BMW UDS profiles.
+          </div>
+        `;
+        return;
+      }
+
+      cbsItemsGrid.innerHTML = report.items.map(item => {
+        const icon = getItemIcon(item.item_type);
+        const percent = Math.round(item.remaining_percent);
+        let statusClass = 'status-ok';
+        let statusText = 'OK';
+        let barColor = 'var(--accent-green)';
+
+        if (item.status === 'warning') {
+          statusClass = 'status-warning';
+          statusText = 'DUE SOON';
+          barColor = 'var(--accent-amber)';
+        } else if (item.status === 'overdue') {
+          statusClass = 'status-overdue';
+          statusText = 'OVERDUE';
+          barColor = 'var(--accent-red)';
+        }
+
+        const kmText = item.remaining_km !== null && item.remaining_km !== undefined
+          ? `${item.remaining_km.toLocaleString()} km (~${Math.round(item.remaining_km * 0.621371).toLocaleString()} mi)`
+          : 'Interval by Date';
+
+        const dateText = item.due_date || 'Calculated by Km';
+
+        return `
+          <div class="cbs-card">
+            <div class="cbs-card-top">
+              <div class="cbs-title-group">
+                <span class="cbs-icon">${icon}</span>
+                <span class="cbs-name">${item.name}</span>
+              </div>
+              <span class="cbs-status-pill ${statusClass}">${statusText}</span>
+            </div>
+
+            <div class="cbs-life-container">
+              <div class="cbs-life-header">
+                <span>REMAINING SERVICE LIFE</span>
+                <span class="cbs-life-val">${percent} %</span>
+              </div>
+              <div class="cbs-bar-bg">
+                <div class="cbs-bar-fill" style="width: ${percent}%; background-color: ${barColor};"></div>
+              </div>
+            </div>
+
+            <div class="cbs-meta-grid">
+              <div class="cbs-meta-item">
+                <span class="cbs-meta-label">DISTANCE REMAINING</span>
+                <span class="cbs-meta-val">${kmText}</span>
+              </div>
+              <div class="cbs-meta-item">
+                <span class="cbs-meta-label">DUE DATE</span>
+                <span class="cbs-meta-val">${dateText}</span>
+              </div>
+            </div>
+
+            <div class="cbs-card-footer">
+              <span class="cbs-reset-count">Resets: ${item.reset_count}</span>
+              <button class="btn-reset-cbs" data-type="${item.item_type}" data-name="${item.name}">
+                RESET SERVICE
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Attach reset button handlers
+      document.querySelectorAll('.btn-reset-cbs').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          currentCbsResetItem = {
+            type: btn.dataset.type,
+            name: btn.dataset.name,
+          };
+          if (cbsModalItemText) {
+            cbsModalItemText.innerText = `You are about to reset the service interval for "${currentCbsResetItem.name}" back to 100%.`;
+          }
+          if (cbsModal) cbsModal.style.display = 'flex';
+        });
+      });
+    } catch (err) {
+      cbsItemsGrid.innerHTML = `
+        <div class="cbs-card" style="grid-column: 1 / -1; text-align: center; color: var(--text-muted);">
+          Failed to load CBS report: ${err}
+        </div>
+      `;
+    }
+  }
+
+  if (btnRefreshCbs) {
+    btnRefreshCbs.addEventListener('click', () => {
+      fetchCbsReport();
+    });
+  }
+
+  if (btnCancelCbsReset) {
+    btnCancelCbsReset.addEventListener('click', () => {
+      if (cbsModal) cbsModal.style.display = 'none';
+      currentCbsResetItem = null;
+    });
+  }
+
+  if (btnConfirmCbsReset) {
+    btnConfirmCbsReset.addEventListener('click', async () => {
+      if (!currentCbsResetItem) return;
+      try {
+        const msg = await callBackend('reset_cbs', {
+          itemType: currentCbsResetItem.type,
+        });
+        if (cbsModal) cbsModal.style.display = 'none';
+        currentCbsResetItem = null;
+        await fetchCbsReport();
+        alert(msg || 'CBS service reset successfully executed!');
+      } catch (err) {
+        if (cbsModal) cbsModal.style.display = 'none';
+        currentCbsResetItem = null;
+        alert('Failed to reset CBS item: ' + err);
       }
     });
   }

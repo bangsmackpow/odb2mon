@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.3.0</span>
+        <span class="version-badge" id="appVersion">v0.4.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -252,6 +252,23 @@
             </div>
           </div>
         </div>
+
+        <!-- Condition Based Service (CBS) Monitor Section -->
+        <div class="section-divider"></div>
+
+        <div class="section-toolbar" style="margin-top: 24px;">
+          <div class="toolbar-title">
+            <h2>CONDITION BASED SERVICE (CBS)</h2>
+            <p>Live consumable life tracking (DME / KOMBI DID 0xD020) and maintenance interval reset routines (0x0220)</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-secondary" id="btnRefreshCbs">🔄 REFRESH CBS STATUS</button>
+          </div>
+        </div>
+
+        <div class="cbs-grid" id="cbsItemsGrid">
+          <!-- Dynamically rendered -->
+        </div>
       </section>
 
       <!-- 4. VEHICLE PROFILES VIEW -->
@@ -311,7 +328,7 @@
         <div class="update-card" id="updateCard">
           <div class="update-header">
             <div>
-              <h3 id="updateVersionTitle">Current Version: v0.3.0</h3>
+              <h3 id="updateVersionTitle">Current Version: v0.4.0</h3>
               <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
             </div>
             <span class="update-pill" id="updatePill">UP TO DATE</span>
@@ -357,6 +374,24 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" id="btnCancelBatteryReg">CANCEL</button>
           <button class="btn btn-warning" id="btnConfirmBatteryReg">EXECUTE ROUTINE 0x0219</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Safety Confirmation Modal for CBS Reset -->
+    <div class="modal-overlay" id="cbsModal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-icon">🛠</div>
+        <h3>CONFIRM CBS SERVICE RESET</h3>
+        <p class="modal-warn" id="cbsModalItemText">
+          You are about to reset the Condition Based Service interval for this item.
+        </p>
+        <p class="modal-hint">
+          This executes UDS Routine 0x0220 to recalibrate the service life to 100% and advance the inspection calendar. Verify maintenance has physically been performed. Ignition must be ON with engine OFF.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCancelCbsReset">CANCEL</button>
+          <button class="btn btn-warning" id="btnConfirmCbsReset">EXECUTE ROUTINE 0x0220</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
-use crate::profile::{BatteryStatus, DtcRecord, ParameterType, ParameterValue, VehicleProfile};
+use crate::profile::{
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue, VehicleProfile,
+};
 use crate::protocols::doip;
 use crate::protocols::uds;
 use async_trait::async_trait;
@@ -206,6 +208,34 @@ impl ObdConnection for EnetConnection {
         uds::parse_routine_response(uds::ROUTINE_BMW_BATTERY_REGISTRATION, &resp)?;
 
         Ok("Battery replacement registered successfully in DME memory. Alternator charging curve & battery aging history reset to 0 km.".into())
+    }
+
+    async fn read_cbs_report(&mut self) -> Result<CbsReport, ObdError> {
+        let req = uds::build_read_did_request(uds::DID_BMW_CBS_OVERVIEW);
+        let resp = match self.send_uds_request(&req).await {
+            Ok(r) => r,
+            Err(ObdError::NegativeResponse {
+                service_id: 0x22,
+                nrc: 0x22,
+                ..
+            }) => {
+                self.elevate_to_extended_session().await?;
+                self.send_uds_request(&req).await?
+            }
+            Err(e) => return Err(e),
+        };
+        uds::parse_cbs_report_response(uds::DID_BMW_CBS_OVERVIEW, &resp)
+    }
+
+    async fn reset_cbs_item(&mut self, item: CbsItemType) -> Result<String, ObdError> {
+        self.elevate_to_extended_session().await?;
+        let req = uds::build_cbs_reset_routine(item);
+        let resp = self.send_uds_request(&req).await?;
+        uds::parse_routine_response(uds::ROUTINE_BMW_CBS_RESET, &resp)?;
+        Ok(format!(
+            "Successfully reset Condition Based Service item: {} (Routine 0x0220 executed)",
+            item.display_name()
+        ))
     }
 
     fn profile(&self) -> VehicleProfile {

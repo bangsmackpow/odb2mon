@@ -100,3 +100,100 @@ pub struct BatteryStatus {
     pub battery_type: Option<String>,
     pub last_replacement_km: Vec<u32>,
 }
+
+/// BMW Condition Based Service (CBS) item identifiers
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CbsItemType {
+    EngineOil,
+    FrontBrakes,
+    RearBrakes,
+    BrakeFluid,
+    VehicleCheck,
+    SparkPlugs,
+    CabinFilter,
+}
+
+impl CbsItemType {
+    pub fn id_byte(&self) -> u8 {
+        match self {
+            Self::EngineOil => 0x01,
+            Self::FrontBrakes => 0x02,
+            Self::RearBrakes => 0x03,
+            Self::BrakeFluid => 0x04,
+            Self::VehicleCheck => 0x05,
+            Self::SparkPlugs => 0x06,
+            Self::CabinFilter => 0x07,
+        }
+    }
+
+    pub fn from_id_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0x01 => Some(Self::EngineOil),
+            0x02 => Some(Self::FrontBrakes),
+            0x03 => Some(Self::RearBrakes),
+            0x04 => Some(Self::BrakeFluid),
+            0x05 => Some(Self::VehicleCheck),
+            0x06 => Some(Self::SparkPlugs),
+            0x07 => Some(Self::CabinFilter),
+            _ => None,
+        }
+    }
+
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::EngineOil => "Engine Oil",
+            Self::FrontBrakes => "Front Brake Pads",
+            Self::RearBrakes => "Rear Brake Pads",
+            Self::BrakeFluid => "Brake Fluid",
+            Self::VehicleCheck => "Vehicle Inspection",
+            Self::SparkPlugs => "Spark Plugs",
+            Self::CabinFilter => "Microfilter / Cabin",
+        }
+    }
+}
+
+impl std::str::FromStr for CbsItemType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().replace('-', "_").as_str() {
+            "engine_oil" | "oil" => Ok(Self::EngineOil),
+            "front_brakes" | "front_brake" => Ok(Self::FrontBrakes),
+            "rear_brakes" | "rear_brake" => Ok(Self::RearBrakes),
+            "brake_fluid" | "fluid" => Ok(Self::BrakeFluid),
+            "vehicle_check" | "inspection" => Ok(Self::VehicleCheck),
+            "spark_plugs" | "plugs" => Ok(Self::SparkPlugs),
+            "cabin_filter" | "microfilter" => Ok(Self::CabinFilter),
+            _ => Err(format!("Unknown CBS item type: {s}")),
+        }
+    }
+}
+
+/// Service status of a Condition Based Service item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CbsStatus {
+    Ok,
+    Warning,
+    Overdue,
+}
+
+/// Individual Condition Based Service item state.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CbsItem {
+    pub item_type: CbsItemType,
+    pub name: String,
+    pub status: CbsStatus,
+    pub remaining_percent: f32,
+    pub remaining_km: Option<i32>,
+    pub due_date: Option<String>,
+    pub reset_count: u32,
+}
+
+/// Full CBS service overview report for the vehicle.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CbsReport {
+    pub supported: bool,
+    pub items: Vec<CbsItem>,
+}

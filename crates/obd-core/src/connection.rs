@@ -1,5 +1,7 @@
 use crate::error::ObdError;
-use crate::profile::{BatteryStatus, DtcRecord, ParameterType, ParameterValue, VehicleProfile};
+use crate::profile::{
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue, VehicleProfile,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +50,20 @@ pub trait ObdConnection: Send + Sync {
     async fn register_battery_replacement(&mut self) -> Result<String, ObdError> {
         Err(ObdError::Unsupported(
             "Battery registration is only supported on BMW UDS profiles".into(),
+        ))
+    }
+
+    /// Queries Condition Based Service (CBS) maintenance intervals and status.
+    async fn read_cbs_report(&mut self) -> Result<CbsReport, ObdError> {
+        Err(ObdError::Unsupported(
+            "CBS monitoring is only supported on BMW UDS profiles".into(),
+        ))
+    }
+
+    /// Resets a specific Condition Based Service (CBS) item interval.
+    async fn reset_cbs_item(&mut self, _item: CbsItemType) -> Result<String, ObdError> {
+        Err(ObdError::Unsupported(
+            "CBS reset is only supported on BMW UDS profiles".into(),
         ))
     }
 

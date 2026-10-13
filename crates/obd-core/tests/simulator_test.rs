@@ -136,3 +136,56 @@ async fn test_gmc_battery_registration_unsupported() {
     let reg_err = conn.register_battery_replacement().await.unwrap_err();
     assert!(matches!(reg_err, obd_core::ObdError::Unsupported(_)));
 }
+
+#[tokio::test]
+async fn test_bmw_cbs_monitor_and_reset() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    let report = conn.read_cbs_report().await.unwrap();
+    assert!(report.supported);
+    assert_eq!(report.items.len(), 5);
+
+    // Verify initial rear brakes in warning state (15%)
+    let rear_brakes = report
+        .items
+        .iter()
+        .find(|i| i.item_type == obd_core::CbsItemType::RearBrakes)
+        .unwrap();
+    assert_eq!(rear_brakes.status, obd_core::CbsStatus::Warning);
+    assert_eq!(rear_brakes.remaining_percent, 15.0);
+
+    // Reset rear brakes
+    let reset_msg = conn
+        .reset_cbs_item(obd_core::CbsItemType::RearBrakes)
+        .await
+        .unwrap();
+    assert!(reset_msg.contains("Rear Brake Pads"));
+
+    // Verify rear brakes are now 100% and OK
+    let updated_report = conn.read_cbs_report().await.unwrap();
+    let updated_rear = updated_report
+        .items
+        .iter()
+        .find(|i| i.item_type == obd_core::CbsItemType::RearBrakes)
+        .unwrap();
+    assert_eq!(updated_rear.status, obd_core::CbsStatus::Ok);
+    assert_eq!(updated_rear.remaining_percent, 100.0);
+    assert_eq!(updated_rear.remaining_km, Some(50000));
+    assert_eq!(updated_rear.reset_count, 3);
+}
+
+#[tokio::test]
+async fn test_gmc_cbs_unsupported() {
+    let mut conn = MockConnection::new(VehicleProfile::GmcAcadia_2010);
+    conn.connect().await.unwrap();
+
+    let err = conn.read_cbs_report().await.unwrap_err();
+    assert!(matches!(err, obd_core::ObdError::Unsupported(_)));
+
+    let reset_err = conn
+        .reset_cbs_item(obd_core::CbsItemType::EngineOil)
+        .await
+        .unwrap_err();
+    assert!(matches!(reset_err, obd_core::ObdError::Unsupported(_)));
+}

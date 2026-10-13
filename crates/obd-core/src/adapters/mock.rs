@@ -1,7 +1,8 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, DtcRecord, DtcStatus, ParameterType, ParameterValue, VehicleProfile,
+    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, ParameterType,
+    ParameterValue, VehicleProfile,
 };
 use async_trait::async_trait;
 use std::time::Instant;
@@ -14,11 +15,62 @@ pub struct MockConnection {
     active_dtcs: Vec<DtcRecord>,
     battery_history: Vec<u32>,
     battery_soc: f32,
+    cbs_items: Vec<CbsItem>,
 }
 
 impl MockConnection {
     pub fn new(profile: VehicleProfile) -> Self {
-        let (active_dtcs, battery_history, battery_soc) = match profile {
+        let default_bmw_cbs = || {
+            vec![
+                CbsItem {
+                    item_type: CbsItemType::EngineOil,
+                    name: CbsItemType::EngineOil.display_name().into(),
+                    status: CbsStatus::Ok,
+                    remaining_percent: 42.0,
+                    remaining_km: Some(6200),
+                    due_date: Some("11/2026".into()),
+                    reset_count: 3,
+                },
+                CbsItem {
+                    item_type: CbsItemType::FrontBrakes,
+                    name: CbsItemType::FrontBrakes.display_name().into(),
+                    status: CbsStatus::Ok,
+                    remaining_percent: 78.0,
+                    remaining_km: Some(34000),
+                    due_date: None,
+                    reset_count: 1,
+                },
+                CbsItem {
+                    item_type: CbsItemType::RearBrakes,
+                    name: CbsItemType::RearBrakes.display_name().into(),
+                    status: CbsStatus::Warning,
+                    remaining_percent: 15.0,
+                    remaining_km: Some(3100),
+                    due_date: None,
+                    reset_count: 2,
+                },
+                CbsItem {
+                    item_type: CbsItemType::BrakeFluid,
+                    name: CbsItemType::BrakeFluid.display_name().into(),
+                    status: CbsStatus::Ok,
+                    remaining_percent: 88.0,
+                    remaining_km: None,
+                    due_date: Some("04/2027".into()),
+                    reset_count: 2,
+                },
+                CbsItem {
+                    item_type: CbsItemType::VehicleCheck,
+                    name: CbsItemType::VehicleCheck.display_name().into(),
+                    status: CbsStatus::Ok,
+                    remaining_percent: 55.0,
+                    remaining_km: Some(18500),
+                    due_date: Some("09/2027".into()),
+                    reset_count: 1,
+                },
+            ]
+        };
+
+        let (active_dtcs, battery_history, battery_soc, cbs_items) = match profile {
             VehicleProfile::BmwF10_535i => (
                 vec![
                     DtcRecord {
@@ -36,6 +88,7 @@ impl MockConnection {
                 ],
                 vec![142300, 78100],
                 86.5,
+                default_bmw_cbs(),
             ),
             VehicleProfile::GmcAcadia_2010 => (
                 vec![
@@ -54,6 +107,7 @@ impl MockConnection {
                 ],
                 vec![],
                 0.0,
+                vec![],
             ),
             VehicleProfile::Simulator => (
                 vec![DtcRecord {
@@ -64,6 +118,7 @@ impl MockConnection {
                 }],
                 vec![142300, 78100],
                 86.5,
+                default_bmw_cbs(),
             ),
         };
 
@@ -74,6 +129,7 @@ impl MockConnection {
             active_dtcs,
             battery_history,
             battery_soc,
+            cbs_items,
         }
     }
 }
@@ -203,6 +259,68 @@ impl ObdConnection for MockConnection {
             }
             VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
                 "Battery registration is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn read_cbs_report(&mut self) -> Result<CbsReport, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => Ok(CbsReport {
+                supported: true,
+                items: self.cbs_items.clone(),
+            }),
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "CBS monitoring is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn reset_cbs_item(&mut self, item_type: CbsItemType) -> Result<String, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                if let Some(item) = self.cbs_items.iter_mut().find(|i| i.item_type == item_type) {
+                    item.remaining_percent = 100.0;
+                    item.status = CbsStatus::Ok;
+                    item.reset_count += 1;
+                    match item_type {
+                        CbsItemType::EngineOil => {
+                            item.remaining_km = Some(15000);
+                            item.due_date = Some("10/2028".into());
+                        }
+                        CbsItemType::FrontBrakes => {
+                            item.remaining_km = Some(50000);
+                        }
+                        CbsItemType::RearBrakes => {
+                            item.remaining_km = Some(50000);
+                        }
+                        CbsItemType::BrakeFluid => {
+                            item.due_date = Some("10/2028".into());
+                        }
+                        CbsItemType::VehicleCheck => {
+                            item.remaining_km = Some(60000);
+                            item.due_date = Some("10/2030".into());
+                        }
+                        _ => {}
+                    }
+                    Ok(format!(
+                        "Successfully reset Condition Based Service item: {} (Simulated Routine 0x0220 executed)",
+                        item_type.display_name()
+                    ))
+                } else {
+                    Err(ObdError::Protocol(format!(
+                        "CBS item {:?} not found in vehicle configuration",
+                        item_type
+                    )))
+                }
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "CBS reset is only supported on BMW UDS profiles".into(),
             )),
         }
     }

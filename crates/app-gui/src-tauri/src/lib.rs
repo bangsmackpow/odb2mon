@@ -1,6 +1,7 @@
 use obd_core::{
-    check_for_updates, BatteryStatus, BluetoothConnection, DashboardSnapshot, DtcRecord,
-    EnetConnection, MockConnection, ObdConnection, UpdateInfo, VehicleManager, VehicleProfile,
+    check_for_updates, BatteryStatus, BluetoothConnection, CbsItemType, CbsReport,
+    DashboardSnapshot, DtcRecord, EnetConnection, MockConnection, ObdConnection, UpdateInfo,
+    VehicleManager, VehicleProfile,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -112,6 +113,23 @@ async fn register_battery(state: State<'_, AppState>) -> Result<String, String> 
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn get_cbs_report(state: State<'_, AppState>) -> Result<CbsReport, String> {
+    let mgr = state.manager.lock().await;
+    mgr.read_cbs_report().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn reset_cbs(item_type: String, state: State<'_, AppState>) -> Result<String, String> {
+    let parsed_type: CbsItemType = item_type
+        .parse()
+        .map_err(|e: String| format!("Invalid CBS item: {e}"))?;
+    let mgr = state.manager.lock().await;
+    mgr.reset_cbs_item(parsed_type)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Default initial connection to realistic simulator
@@ -133,7 +151,9 @@ pub fn run() {
             clear_fault_codes,
             check_update,
             get_battery_status,
-            register_battery
+            register_battery,
+            get_cbs_report,
+            reset_cbs
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {

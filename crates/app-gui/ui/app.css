@@ -895,3 +895,177 @@ body {
   background-color: #e65100;
 }
 
+/* Section Divider */
+.section-divider {
+  height: 1px;
+  background-color: var(--border-dim);
+  margin: 32px 0 16px 0;
+}
+
+/* Condition Based Service Grid */
+.cbs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.cbs-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s ease;
+}
+
+.cbs-card:hover {
+  border-color: var(--border-bright);
+}
+
+.cbs-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cbs-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cbs-icon {
+  font-size: 1.1rem;
+}
+
+.cbs-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.cbs-status-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.cbs-status-pill.status-ok {
+  background-color: rgba(0, 230, 118, 0.1);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  color: var(--accent-green);
+}
+
+.cbs-status-pill.status-warning {
+  background-color: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+  color: var(--accent-amber);
+}
+
+.cbs-status-pill.status-overdue {
+  background-color: rgba(255, 23, 68, 0.1);
+  border: 1px solid rgba(255, 23, 68, 0.3);
+  color: var(--accent-red);
+}
+
+/* CBS Progress Bar */
+.cbs-life-container {
+  margin-bottom: 14px;
+}
+
+.cbs-life-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.cbs-life-val {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.cbs-bar-bg {
+  width: 100%;
+  height: 6px;
+  background-color: #0d0f14;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cbs-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* CBS Meta Rows */
+.cbs-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background-color: #0d0f14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.cbs-meta-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.cbs-meta-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.cbs-meta-val {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* CBS Footer & Reset */
+.cbs-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.cbs-reset-count {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+.btn-reset-cbs {
+  background-color: #1a1e2b;
+  border: 1px solid var(--border-bright);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-reset-cbs:hover {
+  background-color: var(--accent-amber);
+  border-color: var(--accent-amber);
+  color: #000;
+}
+
+
