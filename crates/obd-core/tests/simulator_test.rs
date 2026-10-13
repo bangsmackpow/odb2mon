@@ -189,3 +189,55 @@ async fn test_gmc_cbs_unsupported() {
         .unwrap_err();
     assert!(matches!(reset_err, obd_core::ObdError::Unsupported(_)));
 }
+
+#[tokio::test]
+async fn test_bmw_topology_scan() {
+    let mut conn = MockConnection::new(VehicleProfile::BmwF10_535i);
+    conn.connect().await.unwrap();
+
+    let scan = conn.scan_ecu_topology().await.unwrap();
+    assert!(scan.supported);
+    assert_eq!(scan.total_ecus_scanned, 16);
+    assert_eq!(scan.online_count, 16);
+    assert_eq!(scan.fault_count, 2);
+
+    let dme = scan
+        .nodes
+        .iter()
+        .find(|n| n.logical_address == 0x0012)
+        .unwrap();
+    assert_eq!(dme.short_name, "DME");
+    assert_eq!(dme.health, obd_core::EcuHealth::FaultStored);
+    assert_eq!(dme.dtc_count, 2);
+    assert_eq!(dme.dtcs.len(), 2);
+
+    let egs = scan
+        .nodes
+        .iter()
+        .find(|n| n.logical_address == 0x0018)
+        .unwrap();
+    assert_eq!(egs.short_name, "EGS");
+    assert_eq!(egs.health, obd_core::EcuHealth::Normal);
+    assert_eq!(egs.dtc_count, 0);
+
+    // Clear DTCs and verify topology scan reflects clean state
+    conn.clear_dtcs().await.unwrap();
+    let clean_scan = conn.scan_ecu_topology().await.unwrap();
+    assert_eq!(clean_scan.fault_count, 0);
+    let dme_clean = clean_scan
+        .nodes
+        .iter()
+        .find(|n| n.logical_address == 0x0012)
+        .unwrap();
+    assert_eq!(dme_clean.health, obd_core::EcuHealth::Normal);
+    assert_eq!(dme_clean.dtc_count, 0);
+}
+
+#[tokio::test]
+async fn test_gmc_topology_scan_unsupported() {
+    let mut conn = MockConnection::new(VehicleProfile::GmcAcadia_2010);
+    conn.connect().await.unwrap();
+
+    let err = conn.scan_ecu_topology().await.unwrap_err();
+    assert!(matches!(err, obd_core::ObdError::Unsupported(_)));
+}

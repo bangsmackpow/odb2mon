@@ -166,4 +166,12 @@ impl VehicleManager {
         let mut conn = self.connection.lock().await;
         conn.reset_cbs_item(item).await
     }
+
+    /// Performs an all-module ECU network topology scan across all vehicle bus segments.
+    pub async fn scan_ecu_topology(
+        &self,
+    ) -> Result<crate::profile::TopologyScanReport, crate::error::ObdError> {
+        let mut conn = self.connection.lock().await;
+        conn.scan_ecu_topology().await
+    }
 }

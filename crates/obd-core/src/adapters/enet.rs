@@ -1,7 +1,8 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue, VehicleProfile,
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, EcuHealth, EcuNode, ParameterType,
+    ParameterValue, TopologyScanReport, VehicleProfile,
 };
 use crate::protocols::doip;
 use crate::protocols::uds;
@@ -37,23 +38,26 @@ impl EnetConnection {
         Self::new("169.254.1.1".into(), 6801, 0x0012)
     }
 
-    /// Sends a raw UDS payload wrapped in a DoIP diagnostic message frame and reads response.
-    async fn send_uds_request(&mut self, payload: &[u8]) -> Result<Vec<u8>, ObdError> {
+    /// Sends a raw UDS payload wrapped in a DoIP diagnostic message frame to a specified ECU address.
+    async fn send_uds_request_to_ecu(
+        &mut self,
+        target_ecu: u16,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, ObdError> {
         let stream = self.stream.as_mut().ok_or(ObdError::Disconnected)?;
 
-        let doip_frame =
-            doip::build_diagnostic_message(self.tester_address, self.target_ecu, payload);
+        let doip_frame = doip::build_diagnostic_message(self.tester_address, target_ecu, payload);
 
         stream.write_all(&doip_frame).await?;
 
         // Read DoIP 8-byte header
         let mut header_buf = [0u8; 8];
         timeout(
-            Duration::from_millis(2000),
+            Duration::from_millis(1500),
             stream.read_exact(&mut header_buf),
         )
         .await
-        .map_err(|_| ObdError::Timeout(Duration::from_millis(2000)))??;
+        .map_err(|_| ObdError::Timeout(Duration::from_millis(1500)))??;
 
         let payload_len =
             u32::from_be_bytes([header_buf[4], header_buf[5], header_buf[6], header_buf[7]])
@@ -63,6 +67,11 @@ impl EnetConnection {
         stream.read_exact(&mut payload_buf).await?;
 
         doip::extract_uds_payload(&payload_buf)
+    }
+
+    /// Sends a raw UDS payload wrapped in a DoIP diagnostic message frame to default DME.
+    async fn send_uds_request(&mut self, payload: &[u8]) -> Result<Vec<u8>, ObdError> {
+        self.send_uds_request_to_ecu(self.target_ecu, payload).await
     }
 
     /// Switches ECU diagnostic session to Extended Session (0x10 0x03).
@@ -236,6 +245,91 @@ impl ObdConnection for EnetConnection {
             "Successfully reset Condition Based Service item: {} (Routine 0x0220 executed)",
             item.display_name()
         ))
+    }
+
+    async fn scan_ecu_topology(&mut self) -> Result<TopologyScanReport, ObdError> {
+        let mut nodes = Vec::new();
+        let mut online_count = 0;
+        let mut fault_count = 0;
+
+        for ecu_def in crate::profile::BMW_F10_ECUS {
+            let start = std::time::Instant::now();
+            let req = [0x19, 0x02, 0xFF];
+            match self
+                .send_uds_request_to_ecu(ecu_def.logical_address, &req)
+                .await
+            {
+                Ok(resp) => {
+                    let elapsed = start.elapsed().as_millis() as u32;
+                    let dtcs = uds::parse_dtc_response(&resp).unwrap_or_default();
+                    let dtcs: Vec<DtcRecord> = dtcs
+                        .into_iter()
+                        .map(|mut d| {
+                            d.ecu_source = Some(ecu_def.short_name.to_string());
+                            d
+                        })
+                        .collect();
+
+                    let health = if dtcs.is_empty() {
+                        EcuHealth::Normal
+                    } else {
+                        EcuHealth::FaultStored
+                    };
+
+                    online_count += 1;
+                    if !dtcs.is_empty() {
+                        fault_count += dtcs.len();
+                    }
+
+                    nodes.push(EcuNode {
+                        logical_address: ecu_def.logical_address,
+                        short_name: ecu_def.short_name.to_string(),
+                        full_name: ecu_def.full_name.to_string(),
+                        bus: ecu_def.bus,
+                        health,
+                        dtc_count: dtcs.len(),
+                        dtcs,
+                        response_time_ms: Some(elapsed),
+                    });
+                }
+                Err(ObdError::NegativeResponse {
+                    service_id: 0x19, ..
+                }) => {
+                    let elapsed = start.elapsed().as_millis() as u32;
+                    online_count += 1;
+                    nodes.push(EcuNode {
+                        logical_address: ecu_def.logical_address,
+                        short_name: ecu_def.short_name.to_string(),
+                        full_name: ecu_def.full_name.to_string(),
+                        bus: ecu_def.bus,
+                        health: EcuHealth::CommError,
+                        dtc_count: 0,
+                        dtcs: Vec::new(),
+                        response_time_ms: Some(elapsed),
+                    });
+                }
+                Err(_) => {
+                    nodes.push(EcuNode {
+                        logical_address: ecu_def.logical_address,
+                        short_name: ecu_def.short_name.to_string(),
+                        full_name: ecu_def.full_name.to_string(),
+                        bus: ecu_def.bus,
+                        health: EcuHealth::NoResponse,
+                        dtc_count: 0,
+                        dtcs: Vec::new(),
+                        response_time_ms: None,
+                    });
+                }
+            }
+        }
+
+        Ok(TopologyScanReport {
+            supported: true,
+            total_ecus_scanned: crate::profile::BMW_F10_ECUS.len(),
+            online_count,
+            fault_count,
+            nodes,
+        })
     }
 
     fn profile(&self) -> VehicleProfile {

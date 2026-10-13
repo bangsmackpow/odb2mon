@@ -1,7 +1,7 @@
 use obd_core::{
     check_for_updates, BatteryStatus, BluetoothConnection, CbsItemType, CbsReport,
-    DashboardSnapshot, DtcRecord, EnetConnection, MockConnection, ObdConnection, UpdateInfo,
-    VehicleManager, VehicleProfile,
+    DashboardSnapshot, DtcRecord, EnetConnection, MockConnection, ObdConnection,
+    TopologyScanReport, UpdateInfo, VehicleManager, VehicleProfile,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -130,6 +130,12 @@ async fn reset_cbs(item_type: String, state: State<'_, AppState>) -> Result<Stri
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn scan_topology(state: State<'_, AppState>) -> Result<TopologyScanReport, String> {
+    let mgr = state.manager.lock().await;
+    mgr.scan_ecu_topology().await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Default initial connection to realistic simulator
@@ -153,7 +159,8 @@ pub fn run() {
             get_battery_status,
             register_battery,
             get_cbs_report,
-            reset_cbs
+            reset_cbs,
+            scan_topology
         ])
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {

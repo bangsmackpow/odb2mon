@@ -12,7 +12,7 @@
     <header class="header">
       <div class="brand">
         <span class="brand-logo">ODB2MON</span>
-        <span class="version-badge" id="appVersion">v0.4.0</span>
+        <span class="version-badge" id="appVersion">v0.5.0</span>
       </div>
 
       <nav class="nav-tabs">
@@ -21,6 +21,9 @@
         </button>
         <button class="nav-btn" data-page="dtcs">
           <span class="icon">🛠</span> FAULT CODES <span class="badge" id="dtcBadge">0</span>
+        </button>
+        <button class="nav-btn" data-page="topology">
+          <span class="icon">🕸</span> TOPOLOGY
         </button>
         <button class="nav-btn" data-page="service">
           <span class="icon">⚡</span> BMW SERVICE
@@ -143,6 +146,55 @@
           <div class="dtc-list" id="dtcList" style="display: none;">
             <!-- Rendered dynamically -->
           </div>
+        </div>
+      </section>
+
+      <!-- 3. TOPOLOGY VIEW (ISTA-Style ECU Network Map) -->
+      <section id="page-topology" class="page">
+        <div class="section-toolbar">
+          <div class="toolbar-title">
+            <h2>ECU NETWORK TOPOLOGY</h2>
+            <p>Live multi-bus controller tree interrogation across PT-CAN, FlexRay, K-CAN, and Ethernet</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-primary" id="btnScanTopology">
+              <span class="icon">🕸</span> RUN TOPOLOGY SCAN
+            </button>
+          </div>
+        </div>
+
+        <div class="service-unsupported-banner" id="topologyUnsupportedBanner" style="display: none;">
+          ⚠️ ECU network topology scan is only supported on BMW UDS / DoIP profiles (e.g. BMW F10). Please switch to the BMW profile in the Profiles tab.
+        </div>
+
+        <!-- Metrics Bar -->
+        <div class="topology-metrics-bar" id="topoMetricsBar">
+          <div class="topo-metric-card">
+            <span class="topo-metric-label">MODULES SCANNED</span>
+            <span class="topo-metric-val" id="topoTotalScanned">--</span>
+          </div>
+          <div class="topo-metric-card">
+            <span class="topo-metric-label">ONLINE CONTROLLERS</span>
+            <span class="topo-metric-val green" id="topoOnlineCount">--</span>
+          </div>
+          <div class="topo-metric-card">
+            <span class="topo-metric-label">FAULTS STORED</span>
+            <span class="topo-metric-val amber" id="topoFaultCount">--</span>
+          </div>
+          <div class="topo-metric-card">
+            <span class="topo-metric-label">NETWORK HEALTH</span>
+            <span class="topo-metric-val" id="topoHealthStatus">READY</span>
+          </div>
+        </div>
+
+        <div id="topoScanLoading" class="topo-loading" style="display: none;">
+          <div class="spinner"></div>
+          <span>Interrogating vehicle gateway and bus controllers over DoIP / UDS...</span>
+        </div>
+
+        <!-- Topology Bus Container -->
+        <div class="topology-container" id="topologyContainer">
+          <!-- Dynamic Bus Segments rendered here: PT-CAN, FlexRay, K-CAN, Ethernet -->
         </div>
       </section>
 
@@ -328,7 +380,7 @@
         <div class="update-card" id="updateCard">
           <div class="update-header">
             <div>
-              <h3 id="updateVersionTitle">Current Version: v0.4.0</h3>
+              <h3 id="updateVersionTitle">Current Version: v0.5.0</h3>
               <p id="updateStatusText">Click check for updates to query GitHub Releases</p>
             </div>
             <span class="update-pill" id="updatePill">UP TO DATE</span>
@@ -392,6 +444,34 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" id="btnCancelCbsReset">CANCEL</button>
           <button class="btn btn-warning" id="btnConfirmCbsReset">EXECUTE ROUTINE 0x0220</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ECU Node Inspector Modal -->
+    <div class="modal-overlay" id="ecuNodeModal" style="display: none;">
+      <div class="modal-card ecu-node-modal-card">
+        <div class="modal-header-row">
+          <div>
+            <h3 id="ecuModalTitle">DME (0x0012)</h3>
+            <span class="ecu-modal-sub" id="ecuModalFullName">Digital Motor Electronics</span>
+          </div>
+          <span class="ecu-status-badge" id="ecuModalBadge">NORMAL</span>
+        </div>
+        <div class="ecu-meta-bar">
+          <div class="ecu-meta-item"><span>BUS:</span> <strong id="ecuModalBus">PT-CAN</strong></div>
+          <div class="ecu-meta-item"><span>ADDRESS:</span> <strong id="ecuModalAddress">0x0012</strong></div>
+          <div class="ecu-meta-item"><span>LATENCY:</span> <strong id="ecuModalLatency">-- ms</strong></div>
+          <div class="ecu-meta-item"><span>DTC COUNT:</span> <strong id="ecuModalDtcCount">0</strong></div>
+        </div>
+        <div class="ecu-dtc-container">
+          <h4>DIAGNOSTIC FAULT MEMORY</h4>
+          <div id="ecuModalDtcList" class="ecu-dtc-list">
+            <!-- DTC entries or 'No faults stored' -->
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="btnCloseEcuModal">CLOSE</button>
         </div>
       </div>
     </div>

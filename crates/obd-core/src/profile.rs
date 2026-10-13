@@ -197,3 +197,169 @@ pub struct CbsReport {
     pub supported: bool,
     pub items: Vec<CbsItem>,
 }
+
+/// Vehicle communication bus segment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BusType {
+    PtCan,    // Powertrain CAN
+    KCan,     // Body / Comfort CAN
+    FlexRay,  // Chassis FlexRay
+    Ethernet, // High-speed DoIP / Gateway
+}
+
+impl BusType {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            Self::PtCan => "PT-CAN (Powertrain)",
+            Self::KCan => "K-CAN (Body / Comfort)",
+            Self::FlexRay => "FlexRay (Chassis / Dynamics)",
+            Self::Ethernet => "Ethernet (Gateway / Multimedia)",
+        }
+    }
+}
+
+/// Operational health state of an Electronic Control Unit (ECU).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EcuHealth {
+    Normal,      // Responding normally, 0 DTCs (Green)
+    FaultStored, // Responding, 1 or more DTCs stored (Amber)
+    NoResponse,  // Unresponsive / Not equipped (Grey)
+    CommError,   // Negative response code / framing error (Red)
+}
+
+/// Individual Electronic Control Unit (ECU) node in the vehicle network topology.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EcuNode {
+    pub logical_address: u16,
+    pub short_name: String,
+    pub full_name: String,
+    pub bus: BusType,
+    pub health: EcuHealth,
+    pub dtc_count: usize,
+    pub dtcs: Vec<DtcRecord>,
+    pub response_time_ms: Option<u32>,
+}
+
+/// Full network topology report across all vehicle controllers.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TopologyScanReport {
+    pub supported: bool,
+    pub total_ecus_scanned: usize,
+    pub online_count: usize,
+    pub fault_count: usize,
+    pub nodes: Vec<EcuNode>,
+}
+
+/// Static metadata defining an ECU node in the BMW F-Series architecture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BmwEcuDefinition {
+    pub logical_address: u16,
+    pub short_name: &'static str,
+    pub full_name: &'static str,
+    pub bus: BusType,
+}
+
+pub const BMW_F10_ECUS: &[BmwEcuDefinition] = &[
+    // PT-CAN (Powertrain)
+    BmwEcuDefinition {
+        logical_address: 0x0012,
+        short_name: "DME",
+        full_name: "Digital Motor Electronics (N55 Engine)",
+        bus: BusType::PtCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0018,
+        short_name: "EGS",
+        full_name: "Electronic Transmission Control (ZF 8HP)",
+        bus: BusType::PtCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0029,
+        short_name: "DSC",
+        full_name: "Dynamic Stability Control / ABS",
+        bus: BusType::PtCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0017,
+        short_name: "EKPS",
+        full_name: "Electronic Fuel Pump Control",
+        bus: BusType::PtCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x005E,
+        short_name: "GWS",
+        full_name: "Gear Selector Switch",
+        bus: BusType::PtCan,
+    },
+    // FlexRay (Chassis / Dynamics)
+    BmwEcuDefinition {
+        logical_address: 0x0030,
+        short_name: "EPS",
+        full_name: "Electronic Power Steering",
+        bus: BusType::FlexRay,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x001C,
+        short_name: "ICM",
+        full_name: "Integrated Chassis Management",
+        bus: BusType::FlexRay,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0026,
+        short_name: "EMF",
+        full_name: "Electromechanical Parking Brake",
+        bus: BusType::FlexRay,
+    },
+    // K-CAN (Body / Comfort)
+    BmwEcuDefinition {
+        logical_address: 0x0040,
+        short_name: "CAS",
+        full_name: "Car Access System (Immobilizer / Ignition)",
+        bus: BusType::KCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0060,
+        short_name: "KOMBI",
+        full_name: "Instrument Cluster",
+        bus: BusType::KCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0078,
+        short_name: "IHKA",
+        full_name: "Integrated Automatic Heating & A/C",
+        bus: BusType::KCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0072,
+        short_name: "FRM",
+        full_name: "Footwell Lighting & Windows Module",
+        bus: BusType::KCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0070,
+        short_name: "JBE",
+        full_name: "Junction Box Electronics / Gateway",
+        bus: BusType::KCan,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0067,
+        short_name: "PDC",
+        full_name: "Park Distance Control",
+        bus: BusType::KCan,
+    },
+    // Ethernet (High-speed / Multimedia / Gateway)
+    BmwEcuDefinition {
+        logical_address: 0x0010,
+        short_name: "ZGW",
+        full_name: "Central Gateway Module",
+        bus: BusType::Ethernet,
+    },
+    BmwEcuDefinition {
+        logical_address: 0x0063,
+        short_name: "HU_NBT",
+        full_name: "Head Unit / Navigation System",
+        bus: BusType::Ethernet,
+    },
+];

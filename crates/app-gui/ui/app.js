@@ -55,6 +55,28 @@ function initApp() {
   const dtcList = document.getElementById('dtcList');
   const confirmModal = document.getElementById('confirmModal');
 
+  // Topology View References
+  const btnScanTopology = document.getElementById('btnScanTopology');
+  const topologyContainer = document.getElementById('topologyContainer');
+  const topoTotalScanned = document.getElementById('topoTotalScanned');
+  const topoOnlineCount = document.getElementById('topoOnlineCount');
+  const topoFaultCount = document.getElementById('topoFaultCount');
+  const topoHealthStatus = document.getElementById('topoHealthStatus');
+  const topoScanLoading = document.getElementById('topoScanLoading');
+  const topologyUnsupportedBanner = document.getElementById('topologyUnsupportedBanner');
+  const topoMetricsBar = document.getElementById('topoMetricsBar');
+
+  const ecuNodeModal = document.getElementById('ecuNodeModal');
+  const ecuModalTitle = document.getElementById('ecuModalTitle');
+  const ecuModalFullName = document.getElementById('ecuModalFullName');
+  const ecuModalBadge = document.getElementById('ecuModalBadge');
+  const ecuModalBus = document.getElementById('ecuModalBus');
+  const ecuModalAddress = document.getElementById('ecuModalAddress');
+  const ecuModalLatency = document.getElementById('ecuModalLatency');
+  const ecuModalDtcCount = document.getElementById('ecuModalDtcCount');
+  const ecuModalDtcList = document.getElementById('ecuModalDtcList');
+  const btnCloseEcuModal = document.getElementById('btnCloseEcuModal');
+
   // Navigation Tab Switching
   navButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -69,6 +91,9 @@ function initApp() {
       const targetElem = document.getElementById(`page-${targetPage}`);
       if (targetElem) {
         targetElem.classList.add('active');
+      }
+      if (targetPage === 'topology') {
+        fetchTopologyScan();
       }
       if (targetPage === 'service') {
         fetchBatteryStatus();
@@ -616,6 +641,205 @@ function initApp() {
       }
     });
   }
+
+  // ----------------------------------------------------
+  // Topology Scan (ISTA-Style ECU Network Map)
+  // ----------------------------------------------------
+  let lastTopologyReport = null;
+
+  async function fetchTopologyScan() {
+    if (!topologyContainer) return;
+    if (topoScanLoading) topoScanLoading.style.display = 'flex';
+    if (btnScanTopology) btnScanTopology.disabled = true;
+
+    try {
+      const report = await callBackend('scan_topology');
+      if (topoScanLoading) topoScanLoading.style.display = 'none';
+      if (btnScanTopology) btnScanTopology.disabled = false;
+
+      if (!report || !report.supported) {
+        if (topologyUnsupportedBanner) topologyUnsupportedBanner.style.display = 'block';
+        if (topoMetricsBar) topoMetricsBar.style.display = 'none';
+        topologyContainer.innerHTML = '';
+        return;
+      }
+
+      if (topologyUnsupportedBanner) topologyUnsupportedBanner.style.display = 'none';
+      if (topoMetricsBar) topoMetricsBar.style.display = 'grid';
+      lastTopologyReport = report;
+
+      // Update metrics
+      if (topoTotalScanned) topoTotalScanned.innerText = report.total_ecus_scanned;
+      if (topoOnlineCount) topoOnlineCount.innerText = report.online_count;
+      if (topoFaultCount) topoFaultCount.innerText = report.fault_count;
+      if (topoHealthStatus) {
+        if (report.fault_count === 0) {
+          topoHealthStatus.innerText = 'ALL NORMAL';
+          topoHealthStatus.className = 'topo-metric-val green';
+        } else {
+          topoHealthStatus.innerText = `${report.fault_count} FAULTS STORED`;
+          topoHealthStatus.className = 'topo-metric-val amber';
+        }
+      }
+
+      // Group nodes by bus type
+      const busGroups = [
+        { key: 'pt_can', name: 'PT-CAN (Powertrain Bus)', badgeClass: 'ptcan', label: '500 kbps · High-Speed CAN' },
+        { key: 'flex_ray', name: 'FlexRay (Chassis & Dynamics Bus)', badgeClass: 'flexray', label: '10 Mbps · Deterministic Dual-Channel' },
+        { key: 'k_can', name: 'K-CAN (Body & Interior Bus)', badgeClass: 'kcan', label: '100 kbps · Low-Speed Fault-Tolerant CAN' },
+        { key: 'ethernet', name: 'Ethernet (Gateway & Multimedia)', badgeClass: 'ethernet', label: '100BASE-TX · 100 Mbps DoIP / BroadR-Reach' },
+      ];
+
+      topologyContainer.innerHTML = busGroups.map(group => {
+        const nodes = report.nodes.filter(n => n.bus === group.key);
+        if (!nodes || nodes.length === 0) return '';
+
+        const nodesHtml = nodes.map(node => {
+          let cardClass = 'normal';
+          let pillClass = 'pill-green';
+          let pillText = 'NORMAL';
+
+          if (node.health === 'fault_stored') {
+            cardClass = 'fault-stored';
+            pillClass = 'pill-amber';
+            pillText = `${node.dtc_count} FAULT${node.dtc_count > 1 ? 'S' : ''}`;
+          } else if (node.health === 'comm_error') {
+            cardClass = 'comm-error';
+            pillClass = 'pill-red';
+            pillText = 'COMM ERROR';
+          } else if (node.health === 'no_response') {
+            cardClass = 'no-response';
+            pillClass = 'pill-grey';
+            pillText = 'NO RESPONSE';
+          }
+
+          const hexAddr = '0x' + node.logical_address.toString(16).toUpperCase().padStart(4, '0');
+          const latencyStr = node.response_time_ms != null ? `${node.response_time_ms} ms` : 'Timeout';
+
+          return `
+            <div class="ecu-card ${cardClass}" data-addr="${node.logical_address}">
+              <div class="ecu-card-top">
+                <span class="ecu-short-name">${node.short_name}</span>
+                <span class="ecu-addr">${hexAddr}</span>
+              </div>
+              <div class="ecu-full-name">${node.full_name}</div>
+              <div class="ecu-card-bottom">
+                <span class="ecu-pill ${pillClass}">${pillText}</span>
+                <span class="ecu-latency-text">${latencyStr}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <div class="bus-section">
+            <div class="bus-header">
+              <div class="bus-title-group">
+                <span class="bus-title">${group.name}</span>
+                <span class="bus-badge ${group.badgeClass}">${nodes.length} CONTROLLERS</span>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-dim);">${group.label}</span>
+            </div>
+            <div class="bus-nodes-grid">
+              ${nodesHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Attach click listeners to cards
+      document.querySelectorAll('.ecu-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const addr = parseInt(card.dataset.addr, 10);
+          const node = report.nodes.find(n => n.logical_address === addr);
+          if (node) {
+            openEcuInspector(node);
+          }
+        });
+      });
+
+    } catch (err) {
+      if (topoScanLoading) topoScanLoading.style.display = 'none';
+      if (btnScanTopology) btnScanTopology.disabled = false;
+      if (topologyUnsupportedBanner) {
+        topologyUnsupportedBanner.innerText = `Topology scan failed: ${err}`;
+        topologyUnsupportedBanner.style.display = 'block';
+      }
+    }
+  }
+
+  function openEcuInspector(node) {
+    if (!ecuNodeModal) return;
+    const hexAddr = '0x' + node.logical_address.toString(16).toUpperCase().padStart(4, '0');
+    if (ecuModalTitle) ecuModalTitle.innerText = `${node.short_name} (${hexAddr})`;
+    if (ecuModalFullName) ecuModalFullName.innerText = node.full_name;
+
+    if (ecuModalBadge) {
+      if (node.health === 'normal') {
+        ecuModalBadge.innerText = 'NORMAL';
+        ecuModalBadge.className = 'ecu-status-badge pill-green';
+      } else if (node.health === 'fault_stored') {
+        ecuModalBadge.innerText = `${node.dtc_count} FAULT${node.dtc_count > 1 ? 'S' : ''}`;
+        ecuModalBadge.className = 'ecu-status-badge pill-amber';
+      } else if (node.health === 'comm_error') {
+        ecuModalBadge.innerText = 'COMM ERROR';
+        ecuModalBadge.className = 'ecu-status-badge pill-red';
+      } else {
+        ecuModalBadge.innerText = 'NO RESPONSE';
+        ecuModalBadge.className = 'ecu-status-badge pill-grey';
+      }
+    }
+
+    const busNames = {
+      'pt_can': 'PT-CAN (Powertrain)',
+      'flex_ray': 'FlexRay (Chassis & Dynamics)',
+      'k_can': 'K-CAN (Body & Interior)',
+      'ethernet': 'Ethernet (Gateway)',
+    };
+
+    if (ecuModalBus) ecuModalBus.innerText = busNames[node.bus] || node.bus;
+    if (ecuModalAddress) ecuModalAddress.innerText = hexAddr;
+    if (ecuModalLatency) ecuModalLatency.innerText = node.response_time_ms != null ? `${node.response_time_ms} ms` : 'Unreachable';
+    if (ecuModalDtcCount) ecuModalDtcCount.innerText = node.dtc_count;
+
+    if (ecuModalDtcList) {
+      if (!node.dtcs || node.dtcs.length === 0) {
+        ecuModalDtcList.innerHTML = `
+          <div class="ecu-dtc-empty">
+            ✓ No active diagnostic trouble codes stored in this ECU memory.
+          </div>
+        `;
+      } else {
+        ecuModalDtcList.innerHTML = node.dtcs.map(dtc => `
+          <div class="ecu-dtc-row">
+            <div class="ecu-dtc-code-group">
+              <span class="ecu-dtc-code">${dtc.code}</span>
+              <span class="ecu-dtc-desc">${dtc.description}</span>
+            </div>
+            <span class="dtc-status ${dtc.status.toLowerCase()}">${dtc.status.toUpperCase()}</span>
+          </div>
+        `).join('');
+      }
+    }
+
+    ecuNodeModal.style.display = 'flex';
+  }
+
+  if (btnCloseEcuModal) {
+    btnCloseEcuModal.addEventListener('click', () => {
+      if (ecuNodeModal) ecuNodeModal.style.display = 'none';
+    });
+  }
+
+  if (btnScanTopology) {
+    btnScanTopology.addEventListener('click', () => {
+      fetchTopologyScan();
+    });
+  }
+
+  window.addEventListener('click', (e) => {
+    if (e.target === ecuNodeModal) ecuNodeModal.style.display = 'none';
+  });
 
   // Event Push Listener
   listenToEvent('telemetry-update', event => {

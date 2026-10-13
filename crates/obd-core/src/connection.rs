@@ -1,6 +1,7 @@
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue, VehicleProfile,
+    BatteryStatus, CbsItemType, CbsReport, DtcRecord, ParameterType, ParameterValue,
+    TopologyScanReport, VehicleProfile,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -64,6 +65,13 @@ pub trait ObdConnection: Send + Sync {
     async fn reset_cbs_item(&mut self, _item: CbsItemType) -> Result<String, ObdError> {
         Err(ObdError::Unsupported(
             "CBS reset is only supported on BMW UDS profiles".into(),
+        ))
+    }
+
+    /// Performs a full-network Electronic Control Unit (ECU) topology scan across all vehicle bus segments.
+    async fn scan_ecu_topology(&mut self) -> Result<TopologyScanReport, ObdError> {
+        Err(ObdError::Unsupported(
+            "ECU topology scan is only supported on BMW UDS profiles".into(),
         ))
     }
 

@@ -1,8 +1,8 @@
 use crate::connection::ObdConnection;
 use crate::error::ObdError;
 use crate::profile::{
-    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, ParameterType,
-    ParameterValue, VehicleProfile,
+    BatteryStatus, CbsItem, CbsItemType, CbsReport, CbsStatus, DtcRecord, DtcStatus, EcuHealth,
+    EcuNode, ParameterType, ParameterValue, TopologyScanReport, VehicleProfile, BMW_F10_ECUS,
 };
 use async_trait::async_trait;
 use std::time::Instant;
@@ -321,6 +321,61 @@ impl ObdConnection for MockConnection {
             }
             VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
                 "CBS reset is only supported on BMW UDS profiles".into(),
+            )),
+        }
+    }
+
+    async fn scan_ecu_topology(&mut self) -> Result<TopologyScanReport, ObdError> {
+        if !self.connected {
+            return Err(ObdError::Disconnected);
+        }
+
+        match self.profile {
+            VehicleProfile::BmwF10_535i | VehicleProfile::Simulator => {
+                let mut nodes = Vec::new();
+                let mut fault_count = 0;
+
+                for (idx, ecu_def) in BMW_F10_ECUS.iter().enumerate() {
+                    let (health, dtcs, dtc_count) = if ecu_def.logical_address == 0x0012 {
+                        if self.active_dtcs.is_empty() {
+                            (EcuHealth::Normal, vec![], 0)
+                        } else {
+                            (
+                                EcuHealth::FaultStored,
+                                self.active_dtcs.clone(),
+                                self.active_dtcs.len(),
+                            )
+                        }
+                    } else {
+                        (EcuHealth::Normal, vec![], 0)
+                    };
+
+                    fault_count += dtc_count;
+                    // Realistic simulated response latency (12ms - 38ms)
+                    let response_time_ms = Some(12 + ((idx as u32 * 7) % 25));
+
+                    nodes.push(EcuNode {
+                        logical_address: ecu_def.logical_address,
+                        short_name: ecu_def.short_name.to_string(),
+                        full_name: ecu_def.full_name.to_string(),
+                        bus: ecu_def.bus,
+                        health,
+                        dtc_count,
+                        dtcs,
+                        response_time_ms,
+                    });
+                }
+
+                Ok(TopologyScanReport {
+                    supported: true,
+                    total_ecus_scanned: BMW_F10_ECUS.len(),
+                    online_count: BMW_F10_ECUS.len(),
+                    fault_count,
+                    nodes,
+                })
+            }
+            VehicleProfile::GmcAcadia_2010 => Err(ObdError::Unsupported(
+                "ECU network topology scan is only supported on BMW UDS profiles".into(),
             )),
         }
     }

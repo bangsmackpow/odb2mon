@@ -1068,4 +1068,360 @@ body {
   color: #000;
 }
 
+/* ========================================================
+   TOPOLOGY VIEW (ISTA-Style ECU Network Map)
+   ======================================================== */
+
+.topology-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.topo-metric-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topo-metric-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.topo-metric-val {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+}
+
+.topo-metric-val.green {
+  color: var(--accent-green);
+}
+
+.topo-metric-val.amber {
+  color: var(--accent-amber);
+}
+
+.topo-metric-val.red {
+  color: var(--accent-red);
+}
+
+.topo-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  background-color: #0e111a;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  color: var(--accent-amber);
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 20px;
+}
+
+.topology-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.bus-section {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+
+.bus-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.bus-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bus-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+}
+
+.bus-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.bus-badge.ptcan {
+  background-color: rgba(0, 229, 255, 0.12);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+}
+
+.bus-badge.flexray {
+  background-color: rgba(213, 0, 249, 0.12);
+  color: #e040fb;
+  border: 1px solid rgba(213, 0, 249, 0.4);
+}
+
+.bus-badge.kcan {
+  background-color: rgba(0, 230, 118, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 230, 118, 0.4);
+}
+
+.bus-badge.ethernet {
+  background-color: rgba(255, 171, 0, 0.12);
+  color: #ffd600;
+  border: 1px solid rgba(255, 171, 0, 0.4);
+}
+
+.bus-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+/* ECU Node Card (ISTA Style) */
+.ecu-card {
+  background-color: #0b0d14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.ecu-card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-2px);
+}
+
+.ecu-card.normal {
+  border-left: 4px solid var(--accent-green);
+}
+
+.ecu-card.fault-stored {
+  border-left: 4px solid var(--accent-amber);
+  box-shadow: 0 0 12px rgba(255, 152, 0, 0.12);
+}
+
+.ecu-card.comm-error {
+  border-left: 4px solid var(--accent-red);
+  box-shadow: 0 0 12px rgba(255, 23, 68, 0.15);
+}
+
+.ecu-card.no-response {
+  border-left: 4px solid #3d4455;
+  opacity: 0.6;
+}
+
+.ecu-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.ecu-short-name {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--text-main);
+}
+
+.ecu-addr {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.ecu-full-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.25;
+  min-height: 28px;
+}
+
+.ecu-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ecu-pill {
+  font-size: 0.66rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.4px;
+}
+
+.ecu-pill.pill-green {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--accent-green);
+}
+
+.ecu-pill.pill-amber {
+  background-color: rgba(255, 152, 0, 0.2);
+  color: var(--accent-amber);
+}
+
+.ecu-pill.pill-red {
+  background-color: rgba(255, 23, 68, 0.2);
+  color: var(--accent-red);
+}
+
+.ecu-pill.pill-grey {
+  background-color: #1c202a;
+  color: var(--text-dim);
+}
+
+.ecu-latency-text {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+/* ECU Inspector Modal */
+.ecu-node-modal-card {
+  max-width: 600px;
+  width: 90%;
+}
+
+.modal-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.ecu-modal-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 4px;
+}
+
+.ecu-status-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.ecu-meta-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  background-color: #0c0e14;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 12px;
+  margin: 16px 0;
+}
+
+.ecu-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ecu-meta-item span {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.ecu-meta-item strong {
+  font-size: 0.88rem;
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.ecu-dtc-container {
+  margin-bottom: 20px;
+}
+
+.ecu-dtc-container h4 {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.ecu-dtc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ecu-dtc-empty {
+  padding: 14px;
+  text-align: center;
+  color: var(--accent-green);
+  background-color: rgba(0, 230, 118, 0.06);
+  border: 1px solid rgba(0, 230, 118, 0.2);
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.ecu-dtc-row {
+  background-color: #0d0f17;
+  border: 1px solid var(--border-dim);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ecu-dtc-code-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ecu-dtc-code {
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--accent-amber);
+}
+
+.ecu-dtc-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+
 
