@@ -1,5 +1,9 @@
 # obd2mon
 
+[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](file:///C:/Users/curtis/Desktop/dev/bimmermon/Cargo.toml)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](file:///C:/Users/curtis/Desktop/dev/bimmermon/README.md#license)
+[![Tests](https://img.shields.io/badge/tests-49%20passed-brightgreen.svg)](file:///C:/Users/curtis/Desktop/dev/bimmermon/crates/obd-core/tests/simulator_test.rs)
+
 High-performance, cross-platform automotive diagnostic suite and real-time telemetry engine engineered in pure Rust with asynchronous non-blocking I/O. 
 
 Specifically architected for modern BMW UDS diagnostics over DoIP Ethernet (ENET) and universal SAE J1979 / GM Mode 22 diagnostics over ELM327 Bluetooth/Serial.

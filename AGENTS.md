@@ -45,7 +45,7 @@ obd2mon/
 │   │   │   ├── updater.rs           # GitHub release auto-updater checker
 │   │   │   ├── protocols/
 │   │   │   │   ├── doip.rs          # ISO 13400 framing & Routing Activation
-│   │   │   │   ├── uds.rs           # ISO 14229 Services (0x10, 0x19, 0x22, 0x31, 0x04)
+│   │   │   │   ├── uds.rs           # ISO 14229 Services (0x10, 0x19, 0x22, 0x2E, 0x11, 0x31, 0x04)
 │   │   │   │   └── elm327.rs        # SAE J1979 Modes 01, 03, 04, 09, 22 parsers
 │   │   │   └── adapters/
 │   │   │       ├── enet.rs          # BMW ENET TCP client (169.254.1.1:6801)
@@ -153,8 +153,21 @@ Binaries will be placed in `target/release/obd2mon-app.exe` and `target/release/
 - **Vehicle Coding (FDL Customization):**
   - UDS Services: `0x22` (Read DID), `0x2E` (Write DID), `0x11 0x03` (ECU Soft Reset), `0x10 0x03` (Extended Session).
   - Target ECUs: `KOMBI (0x0060)`, `CAS (0x0040)`, `FRM (0x0072)`, `HU_NBT (0x0063)`.
+  - Configurable DIDs:
+    - `0x3000`: Warning Gong Tone (BMW Standard `0x00`, Rolls-Royce `0x01`, BMW i `0x02`, Mini `0x03` on KOMBI).
+    - `0x3001`: Seat Belt Reminder Chime (Enabled `0x01`, Disabled `0x00` on CAS).
+    - `0x3010`: Welcome Light Duration (Off `0x00`, 10s `0x0A`, 20s `0x14`, 40s `0x28`, 60s `0x3C` on FRM).
+    - `0x3011`: Pathway / Follow-Me-Home Lights (Off `0x00`, 30s `0x1E`, 60s `0x3C`, 90s `0x5A`, 120s `0x78` on FRM).
+    - `0x3012`: Comfort Turn Signal Blinks (1 Blink `0x01`, 3 Blinks `0x03`, 5 Blinks `0x05` on FRM).
+    - `0x3013`: Angel Eye Halo Ring Brightness (50% `0x32`, 70% `0x46`, 100% `0x64` on FRM).
+    - `0x3014`: Fog Lights with High Beams (Off `0x00`, Active `0x01` on FRM).
+    - `0x3020`: Auto-Fold Mirrors on Lock (Disabled `0x00`, 0.5s Hold `0x01`, Immediate `0x02` on CAS).
+    - `0x3021`: Auto-Unlock Doors on Engine Shutdown (Disabled `0x00`, Enabled `0x01` on CAS).
+    - `0x3030`: Auto Start/Stop Memory (Default ON `0x00`, Remember Last `0x01`, Default OFF `0x02` on CAS).
+    - `0x3040`: Digital Speedometer in Instrument Cluster (Disabled `0x00`, Enabled `0x01` on KOMBI).
+    - `0x3041`: iDrive Startup Legal Disclaimer (Enabled `0x01`, Disabled `0x00` on HU_NBT).
   - Voltage Interlock: Requires voltage >= 12.0V prior to write dispatch to prevent EEPROM corruption.
-  - Automatic Rollback Backups: Pre-coding state archived under `coding_backups/`.
+  - Automatic Rollback Backups: Pre-coding state archived under `%APPDATA%\obd2mon\vehicles\<id>\coding_backups\<id>.json`.
 
 ### SAE J1979 / ELM327 Standard
 - **Transport:** Bluetooth RFCOMM or Serial COM port (e.g. `COM3`, default 38400 baud).
